@@ -1,6 +1,6 @@
 # Minerva Identity Survey - Legacy Questionnaire
 
-A modern, interactive web application for conducting personality assessments. This application presents users with a series of questions across different ILO () categories and provides personalized identity assessments.
+A modern, interactive web application for conducting personality assessments. This application presents users with a series of questions across different ILO categories and provides personalized identity assessments.
 
 ## 🛠️ Tech Stack
 
@@ -89,11 +89,11 @@ npm start
 
 The survey consists of questions organized into five ILO categories:
 
-1. **CR ()**
-2. **IR ()** 
-3. **PR ()** 
-4. **SW ()** 
-5. **IE ()**
+1. **CR**
+2. **IR** 
+3. **PR** 
+4. **SW** 
+5. **IE**
 
 Each question offers 5 multiple-choice options, each aligned with one of the five identity categories (e.g., Civic, Legion, Liberty, North, Tower).
 
