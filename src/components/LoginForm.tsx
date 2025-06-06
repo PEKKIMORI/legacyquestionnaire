@@ -1,7 +1,7 @@
 // LoginForm.tsx
 import React, { useState, useRef } from "react";
 import { useRouter } from "next/router";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import app from "../../firebase";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "../../firebase";
@@ -245,12 +245,42 @@ const LoginForm: React.FC = () => {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
             </svg>
             Processing...
-          </span>
-        ) : (
-          isRegister ? "Create Account" : "Sign In"
+          </span>        ) : (
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={isRegister ? "register" : "signin"}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {isRegister ? "Create Account" : "Sign In"}
+            </motion.span>
+          </AnimatePresence>
         )}
+      </motion.button>      <motion.button
+        type="button"
+        onClick={toggleRegister}
+        className="text-sm text-gray-600 hover:text-blue-600 underline underline-offset-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.1 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}      >
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={isRegister ? "signin" : "register"}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.2 }}
+          >
+            {isRegister
+              ? "Already have an account? Sign in"
+              : "Don't have an account? Create one"}
+          </motion.span>
+        </AnimatePresence>
       </motion.button>
-
       {/* Divider */}
       <motion.div 
         className="flex items-center my-4"
@@ -273,7 +303,7 @@ const LoginForm: React.FC = () => {
         }`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.1 }}
         whileHover={isLoading ? {} : { scale: 1.02 }}
         whileTap={isLoading ? {} : { scale: 0.98 }}
       >
@@ -297,19 +327,6 @@ const LoginForm: React.FC = () => {
         </motion.p>
       )}
 
-      <motion.button
-        type="button"
-        onClick={toggleRegister}
-        className="text-sm text-gray-600 hover:text-blue-600 underline underline-offset-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.1 }}
-        whileHover={{ scale: 1.05 }}
-      >
-        {isRegister
-          ? "Already have an account? Sign in"
-          : "Don't have an account? Create one"}
-      </motion.button>
     </motion.form>
   );
 };

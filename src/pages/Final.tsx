@@ -144,26 +144,15 @@ const FinalPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.6 }}
           >
-            Congratulations!
+            Your Minerva Vibe is...
           </motion.h1>
-
-          <motion.p 
-            className="text-xl text-gray-600 mb-8 leading-relaxed"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.6 }}
-          >
-            You&apos;ve successfully completed the Minerva Identity Survey
-          </motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 0.6 }}
-            className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-8 border border-blue-100"
-          >            <p className="text-lg text-gray-700 mb-4">
-              Your Minerva vibe is
-            </p>
+            className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl mb-8 p-8 border border-blue-100"
+          >           
             
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -183,6 +172,15 @@ const FinalPage: React.FC = () => {
               )}
             </motion.div>
           </motion.div>
+          
+          <motion.p 
+            className="text-xl text-gray-600 leading-relaxed"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.6 }}
+          >
+            Get ready for an amazing Foundation Week experience!
+          </motion.p>
 
           <motion.div
             initial={{ opacity: 0 }}
@@ -191,7 +189,7 @@ const FinalPage: React.FC = () => {
             className="mt-8"
           >
             <p className="text-gray-600 text-sm">
-              Get ready for an amazing Foundation Week experience! 🎉
+              Try finding other Minervans with similar vibes! 👀
             </p>
           </motion.div>
 

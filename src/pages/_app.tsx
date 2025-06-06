@@ -3,11 +3,16 @@ import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "framer-motion";
 import "~/styles/globals.css";
 import Head from "next/head";
-import {Open_Sans} from "next/font/google";
+import {Open_Sans, Kalam} from "next/font/google";
 
 const opensans = Open_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
+});
+
+const kalam = Kalam({
+  subsets: ['latin'],
+  weight: ['300', '400', '700'],
 });
 
 const pageVariants = {
@@ -38,9 +43,13 @@ const pageVariants = {
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   const router = useRouter();
-
   return (
     <main className={opensans.className}>
+      <style jsx global>{`
+        :root {
+          --font-kalam: ${kalam.style.fontFamily};
+        }
+      `}</style>
       <Head>
         <title>Minerva Identity</title>
         <meta name="description" content="Your Minerva Identity" />

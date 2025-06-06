@@ -5,8 +5,7 @@ import { motion } from "framer-motion";
 
 const MainSection: React.FC = () => {
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-white via-gray-50 to-white p-6">
-      <motion.div
+    <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-white via-gray-50 to-white p-6">      <motion.div
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="flex flex-col lg:flex-row items-center gap-12 w-full max-w-6xl"
@@ -43,7 +42,7 @@ const MainSection: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.1 }}
             >
-              Welcome to the Minerva Identity Survey
+              Minerva Vibe Check ✔️
             </motion.h1>
             
             <motion.p 
@@ -68,9 +67,26 @@ const MainSection: React.FC = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              Contact Us
-            </motion.button>
-          </motion.div>
+              Contact Us            </motion.button>          </motion.div>
+        </motion.div>
+
+        {/* Handwritten signature message - positioned to mirror the logo */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.4, x: 0 }}
+          transition={{ duration: 1.5, delay: 1 }}
+          className="hidden lg:flex flex-shrink-0 items-center justify-center"
+          style={{ width: '280px', height: '280px' }}
+        >
+          <div
+            className="text-gray-500 text-lg transform rotate-[-5deg] text-center leading-relaxed"
+            style={{ fontFamily: 'var(--font-kalam), "Comic Sans MS", cursive' }}
+          >
+            <div className="mb-2">made with</div>
+            <div className="text-2xl mb-2">❤️</div>
+            <div className="mb-1">for Minerva University</div>
+            <div className="text-sm italic">- Rafael, M28</div>
+          </div>
         </motion.div>
       </motion.div>
     </main>
