@@ -30,11 +30,11 @@ const FinalPage: React.FC = () => {
             const data = responseDoc.data();
 
             const tally: Record<string, number> = {};
-            
-            // Count answers from the new structure
+              // Count answers from the new structure
             Object.keys(data).forEach((key) => {
-              if (key.startsWith('q') && data[key]?.answer) {
-                const answer = data[key].answer;
+              if (key.startsWith('q') && data[key] && typeof data[key] === 'object' && 'answer' in data[key]) {
+                const questionData = data[key] as { answer: string };
+                const answer = questionData.answer;
                 if (typeof answer === "string") {
                   tally[answer] = (tally[answer] ?? 0) + 1;
                 }
@@ -78,11 +78,9 @@ const FinalPage: React.FC = () => {
               Hunter: ["Pursuit", "Instinct", "Tenacity"],
               Mission: ["Purpose", "Vocation", "Calling"],
               Octagon: ["Equilibrium", "Harmony", "Balance"],
-            };
-
-            // Set the vibe based on the highestCategory, ensure fallback if not found
+            };            // Set the vibe based on the highestCategory, ensure fallback if not found
             const pool = minervaVibes[highestCategory] ?? ["unique"];
-            const selectedVibe = pool[Math.floor(Math.random() * pool.length)] || "unique";
+            const selectedVibe = pool[Math.floor(Math.random() * pool.length)] ?? "unique";
             setVibe(selectedVibe);
 
             // Save the results back to Firestore
@@ -155,7 +153,7 @@ const FinalPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.6 }}
           >
-            You've successfully completed the Minerva Identity Survey
+            You&apos;ve successfully completed the Minerva Identity Survey
           </motion.p>
 
           <motion.div
@@ -163,8 +161,7 @@ const FinalPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 0.6 }}
             className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-8 border border-blue-100"
-          >
-            <p className="text-lg text-gray-700 mb-4">
+          >            <p className="text-lg text-gray-700 mb-4">
               Your Minerva vibe is
             </p>
             
@@ -200,7 +197,7 @@ const FinalPage: React.FC = () => {
 
           {/* Floating particles animation */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(6)].map((_, i) => (
+            {Array.from({ length: 6 }, (_, i) => (
               <motion.div
                 key={i}
                 className="absolute w-2 h-2 bg-blue-400 rounded-full opacity-20"

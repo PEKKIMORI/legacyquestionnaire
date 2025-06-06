@@ -1,79 +1,113 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { db } from "./../../../firebase";
-import { doc, collection, updateDoc, addDoc, getDoc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { doc, collection, updateDoc, addDoc } from "firebase/firestore";
+import type { User } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./../../../firebase";
 import Papa from "papaparse";
-import { useMemo } from "react";
 import { motion } from "framer-motion";
 import ProgressBar from "../../components/ProgressBar";
+import { sanitizeInput, validateInput, rateLimiter } from "../../utils/security";
 
+interface QuestionData {
+  ILO: string;
+  Question: string;
+  Group_A?: string;
+  Group_B?: string;
+  Group_C?: string;
+  Group_D?: string;
+  Group_E?: string;
+  Option_A?: string;
+  Option_B?: string;
+  Option_C?: string;
+  Option_D?: string;
+  Option_E?: string;
+}
+
+type GroupedQuestions = Record<string, QuestionData[]>;
 
 // Helper to fetch and parse CSV
 const useQuestionsFromCSV = () => {
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QuestionData[]>([]);
   useEffect(() => {
     fetch("/legacy_questions.csv")
       .then((res) => res.text())
-      .then((csv) => {
-        const parsed = Papa.parse(csv, { header: true });
-        
-        // Define ILO order to ensure consistent sequencing
-        const iloOrder = ['CR', 'IR', 'PR', 'SW', 'IE'];
+      .then((csv) => {        const parsed = Papa.parse(csv, { header: true });
+          // Define ILO order to ensure consistent sequencing
+        const iloOrder = ['CR', 'IC', 'PD', 'SW', 'IE'];
         
         // Group by ILO
-        const grouped: Record<string, any[]> = {};
-        parsed.data.forEach((row: any) => {
-          if (row.ILO && row.Question) { // Ensure valid row
-            if (!grouped[row.ILO]) grouped[row.ILO] = [];
-            (grouped[row.ILO] ?? []).push(row);
+        const grouped: GroupedQuestions = {};
+        parsed.data.forEach((row: unknown) => {
+          const questionRow = row as QuestionData;
+          if (questionRow.ILO && questionRow.Question) { // Ensure valid row
+            if (!grouped[questionRow.ILO]) grouped[questionRow.ILO] = [];
+            grouped[questionRow.ILO]?.push(questionRow);
           }
         });
-        
-        // Take 5 random questions from each ILO
-        const selected: any[] = [];
+          // Take 5 random questions from each ILO
+        const selected: QuestionData[] = [];
         iloOrder.forEach((ilo) => {
           const arr = grouped[ilo] ?? [];
           if (arr.length > 0) {
-            // Shuffle questions within this ILO
-            for (let i = arr.length - 1; i > 0; i--) {
+            // Shuffle questions within this ILO using Fisher-Yates algorithm
+            const shuffledArr = [...arr];
+            for (let i = shuffledArr.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
-              [arr[i], arr[j]] = [arr[j], arr[i]];
+              const temp = shuffledArr[i];
+              if (temp && shuffledArr[j]) {
+                shuffledArr[i] = shuffledArr[j];
+                shuffledArr[j] = temp;
+              }
             }
             // Take up to 5 questions from this ILO
-            const questionsFromThisILO = arr.slice(0, Math.min(5, arr.length));
+            const questionsFromThisILO = shuffledArr.slice(0, Math.min(5, shuffledArr.length));
             selected.push(...questionsFromThisILO);
             console.log(`Selected ${questionsFromThisILO.length} questions from ILO: ${ilo}`);
           }
         });
         
         // Randomize the order of all selected questions
-        for (let i = selected.length - 1; i > 0; i--) {
+        const finalQuestions = [...selected];
+        for (let i = finalQuestions.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [selected[i], selected[j]] = [selected[j], selected[i]];
-        }
-        
-        console.log(`Total questions selected: ${selected.length}`);
-        console.log('Randomized question sequence by ILO:', selected.map(q => q.ILO));
-        setQuestions(selected);
+          const temp = finalQuestions[i];
+          if (temp && finalQuestions[j]) {
+            finalQuestions[i] = finalQuestions[j];
+            finalQuestions[j] = temp;
+          }
+        }        
+        console.log(`Total questions selected: ${finalQuestions.length}`);
+        console.log('Randomized question sequence by ILO:', finalQuestions.map(q => q.ILO));
+        setQuestions(finalQuestions);
       })
       .catch((error) => {
         console.error("Error loading questions:", error);
       });
-  }, []);
-  return questions;
+  }, []);  return questions;
+};
+
+// Helper functions to safely access question properties
+const getGroupValue = (question: QuestionData, option: string): string => {
+  const key = `Group_${option}` as keyof QuestionData;
+  return question[key] ?? '';
+};
+
+const getOptionValue = (question: QuestionData, option: string): string => {
+  const key = `Option_${option}` as keyof QuestionData;
+  return question[key] ?? '';
 };
 
 const QuestionPage: React.FC = () => {
   const router = useRouter();
   const { questionId } = router.query;
-  const questions = useQuestionsFromCSV();
-  const [selectedOption, setSelectedOption] = useState<string>("");
+  const questions = useQuestionsFromCSV();  const [selectedOption, setSelectedOption] = useState<string>("");
   const [currentQuestion, setCurrentQuestion] = useState<number>(1);
-  const [responseId, setResponseId] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [responseId, setResponseId] = useState<string | null>(null);  const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string>("");
 
   // Monitor auth state
   useEffect(() => {
@@ -83,15 +117,20 @@ const QuestionPage: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
-
   useEffect(() => {
     if (questionId) {
-      const parsedQuestionId = parseInt(questionId as string);
-      if (!isNaN(parsedQuestionId)) {
-        setCurrentQuestion(parsedQuestionId);
+      const sanitizedQuestionId = sanitizeInput.text(questionId as string);
+      const parsedQuestionId = parseInt(sanitizedQuestionId);
+      
+      if (!validateInput.questionId(sanitizedQuestionId) || isNaN(parsedQuestionId) || parsedQuestionId < 1) {
+        // Invalid question ID, redirect to first question
+        void router.replace('/questions/1');
+        return;
       }
+      
+      setCurrentQuestion(parsedQuestionId);
     }
-  }, [questionId]);
+  }, [questionId, router]);
 
   useEffect(() => {
     if (questionId) {
@@ -126,29 +165,61 @@ const QuestionPage: React.FC = () => {
   if (!question) {
     return <div>Loading questions...</div>;
   }
-
   const handleOptionChange = (value: string) => {
-    setSelectedOption(value);
-  };
-
-  const goToNextQuestion = async () => {
-    if (!user) {
-      alert("You must be signed in to submit your answers.");
+    const sanitizedValue = sanitizeInput.text(value);
+    
+    if (!validateInput.text(sanitizedValue, 1, 500)) {
+      setValidationError("Please select a valid option");
       return;
     }
+    
+    setValidationError("");
+    setSelectedOption(sanitizedValue);
+  };
+  const goToNextQuestion = async () => {
+    if (!user) {
+      setValidationError("You must be signed in to submit your answers.");
+      return;
+    }
+
+    if (!selectedOption.trim()) {
+      setValidationError("Please select an answer before continuing.");
+      return;
+    }
+
+    // Rate limiting check
+    const userId = user.uid;
+    if (rateLimiter.isRateLimited(`question-${userId}`, 30, 60 * 1000)) {
+      setValidationError("You're submitting answers too quickly. Please wait a moment.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setValidationError("");
 
     // Smooth scroll to top before navigation
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Create a unique question identifier
-    const questionKey = `q${currentQuestion}_${question.ILO}`;
+    // Create a unique question identifier with sanitized data
+    const sanitizedQuestionIndex = sanitizeInput.number(currentQuestion.toString());
+    const sanitizedILO = sanitizeInput.text(question.ILO || '');
+    const sanitizedAnswer = sanitizeInput.text(selectedOption);
+    const sanitizedQuestion = sanitizeInput.text(question.Question || '');
+    
+    if (!sanitizedQuestionIndex || !sanitizedILO || !sanitizedAnswer || !sanitizedQuestion) {
+      setValidationError("Invalid data detected. Please try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const questionKey = `q${sanitizedQuestionIndex}_${sanitizedILO}`;
     
     const responseData = {
       [questionKey]: {
-        answer: selectedOption,
-        question: question.Question,
-        questionIndex: currentQuestion,
-        ilo: question.ILO,
+        answer: sanitizedAnswer,
+        question: sanitizedQuestion,
+        questionIndex: sanitizedQuestionIndex,
+        ilo: sanitizedILO,
         timestamp: new Date()
       }
     };
@@ -158,7 +229,7 @@ const QuestionPage: React.FC = () => {
         // Create new response document on first question
         const newResponseData = {
           userId: user.uid,
-          userEmail: user.email,
+          userEmail: sanitizeInput.email(user.email ?? ''),
           startedAt: new Date(),
           lastUpdated: new Date(),
           totalQuestions: questions.length,
@@ -198,7 +269,9 @@ const QuestionPage: React.FC = () => {
       }, 300);
     } catch (error) {
       console.error("Error saving response:", error);
-      alert("Failed to save response. Please try again.");
+      setValidationError("Failed to save response. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -246,12 +319,11 @@ const QuestionPage: React.FC = () => {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.1 }}
             >
-              <div className="space-y-3">
-                {["A","B","C","D","E"].map((opt, index) => (
+              <div className="space-y-3">                {["A","B","C","D","E"].map((opt, _index) => (
                   <motion.label
                     key={opt}
                     className={`group relative block cursor-pointer rounded-xl border-2 p-6 ${
-                      selectedOption === question[`Group_${opt}`]
+                      selectedOption === getGroupValue(question, opt)
                         ? "border-blue-500 bg-blue-50 shadow-md"
                         : "border-gray-200 bg-white"
                     }`}
@@ -260,7 +332,7 @@ const QuestionPage: React.FC = () => {
                     transition={{ duration: 0.2 }}
                     whileHover={{ 
                       scale: 1.02,
-                      borderColor: selectedOption === question[`Group_${opt}`] ? "#3b82f6" : "#9ca3af",
+                      borderColor: selectedOption === getGroupValue(question, opt) ? "#3b82f6" : "#9ca3af",
                       boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
                       transition: { duration: 0.05 }
                     }}
@@ -270,16 +342,16 @@ const QuestionPage: React.FC = () => {
                       <input
                         type="radio"
                         name={`question${currentQuestion}`}
-                        value={question[`Group_${opt}`]}
-                        checked={selectedOption === question[`Group_${opt}`]}
-                        onChange={() => handleOptionChange(question[`Group_${opt}`])}
+                        value={getGroupValue(question, opt)}
+                        checked={selectedOption === getGroupValue(question, opt)}
+                        onChange={() => handleOptionChange(getGroupValue(question, opt))}
                         className="h-5 w-5 text-blue-600 border-gray-300 focus:ring-0 focus:outline-none mr-4 flex-shrink-0"
                       />
                       <span className="text-lg text-gray-800 leading-relaxed group-hover:text-gray-900">
-                        {question[`Option_${opt}`]}
+                        {getOptionValue(question, opt)}
                       </span>
                     </div>
-                    {selectedOption === question[`Group_${opt}`]}
+                    {selectedOption === getGroupValue(question, opt)}
                   </motion.label>
                 ))}
               </div>
@@ -290,29 +362,41 @@ const QuestionPage: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-            >
-              <motion.button
+            >              <motion.button
                 onClick={goToNextQuestion}
-                disabled={!selectedOption}
+                disabled={!selectedOption || isSubmitting}
                 className={`flex items-center space-x-2 rounded-xl px-8 py-4 font-semibold text-white shadow-lg transition-all duration-150 ${
-                  selectedOption 
+                  selectedOption && !isSubmitting
                     ? "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 hover:shadow-xl" 
                     : "bg-gray-300 cursor-not-allowed"
                 }`}
-                whileHover={selectedOption ? { scale: 1.05 } : {}}
-                whileTap={selectedOption ? { scale: 0.95 } : {}}
-                animate={selectedOption ? { 
+                whileHover={selectedOption && !isSubmitting ? { scale: 1.05 } : {}}
+                whileTap={selectedOption && !isSubmitting ? { scale: 0.95 } : {}}
+                animate={selectedOption && !isSubmitting ? { 
                   boxShadow: "0 10px 25px rgba(59, 130, 246, 0.3)" 
                 } : {}}
               >
                 <span>
-                  {currentQuestion === questions.length ? "Complete Survey" : "Next Question"}
+                  {isSubmitting ? "Saving..." : currentQuestion === questions.length ? "Complete Survey" : "Next Question"}
                 </span>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                {!isSubmitting && (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
               </motion.button>
             </motion.div>
+            
+            {/* Error Message */}
+            {validationError && (
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 text-sm text-red-600 text-center"
+              >
+                {validationError}
+              </motion.p>
+            )}
           </motion.div>
         </motion.div>
       </main>

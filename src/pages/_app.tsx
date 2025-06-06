@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { AnimatePresence, motion } from "framer-motion";
 import "~/styles/globals.css";
 import Head from "next/head";
-import {Open_Sans} from "@next/font/google";
+import {Open_Sans} from "next/font/google";
 
 const opensans = Open_Sans({
   subsets: ['latin'],

@@ -5,30 +5,30 @@
   "type": "module",
   "scripts": {
     "build": "next build",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
     "dev": "next dev",
-    "postinstall": "prisma generate",
     "lint": "next lint",
     "start": "next start"
   },
   "dependencies": {
     "@firebase/firestore": "^4.5.1",
-    "@next/font": "^14.1.0",
-    "@prisma/client": "^5.6.0",
     "@radix-ui/react-select": "^2.0.0",
     "@t3-oss/env-nextjs": "^0.7.1",
+    "@types/dompurify": "^3.0.5",
+    "@types/validator": "^13.15.1",
     "countries-list": "^3.1.0",
-    "firebase": "^10.9.0",
+    "dompurify": "^3.2.6",
+    "dotenv": "^16.5.0",
+    "firebase": "^11.9.0",
     "framer-motion": "^12.16.0",
-    "next": "^14.0.4",
+    "next": "^15.3.3",
     "next-auth": "^4.24.6",
     "papaparse": "^5.5.3",
     "react": "18.2.0",
     "react-country-region-selector": "^3.6.1",
     "react-dom": "18.2.0",
     "react-select": "^5.8.0",
-    "zod": "^3.22.4"
+    "undici": "^7.10.0",
+    "validator": "^13.15.15"
   },
   "devDependencies": {
     "@types/eslint": "^8.44.7",
@@ -44,8 +44,8 @@
     "postcss": "^8.4.31",
     "prettier": "^3.1.0",
     "prettier-plugin-tailwindcss": "^0.5.7",
-    "prisma": "^5.6.0",
     "tailwindcss": "^3.3.5",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.1.6"
   },
   "ct3aMetadata": {
