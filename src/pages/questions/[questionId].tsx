@@ -213,7 +213,7 @@ const QuestionPage: React.FC = () => {
           initial={{ opacity: 0, y: 30, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -30, scale: 0.95 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          transition={{ duration: 0.1, ease: "easeOut" }}
         >
           <motion.div 
             className="relative rounded-2xl bg-white p-8 shadow-xl border border-gray-100 backdrop-blur-sm"
@@ -245,7 +245,7 @@ const QuestionPage: React.FC = () => {
             <motion.form
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.1 }}
             >
               <div className="space-y-3">
                 {["A","B","C","D","E"].map((opt, index) => (
