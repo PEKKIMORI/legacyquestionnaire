@@ -76,7 +76,6 @@ npm start
 │   ├── pages/
 │   │   ├── index.tsx          # Home page
 │   │   ├── Final.tsx          # Results page
-│   │   ├── FinalDetails.tsx   # Detailed results
 │   │   └── questions/
 │   │       └── [questionId].tsx # Dynamic question pages
 │   └── styles/
