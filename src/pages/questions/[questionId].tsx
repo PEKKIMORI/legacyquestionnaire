@@ -2,14 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { db } from "./../../../firebase";
 import { doc, collection, updateDoc, addDoc, getDoc, setDoc } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "./../../../firebase";
 import Papa from "papaparse";
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import ProgressBar from "../../components/ProgressBar";
 
-
-const auth = getAuth(); // Initialize Firebase Authentication
 
 // Helper to fetch and parse CSV
 const useQuestionsFromCSV = () => {

@@ -2,14 +2,12 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { db } from "./../../firebase";
 import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { auth } from "./../../firebase";
 
 const FinalPage: React.FC = () => {
   const [vibe, setVibe] = useState<string>("evaluating...");
-
   useEffect(() => {
     const evaluateResponses = async () => {
-      const auth = getAuth();
       const user = auth.currentUser;
 
       if (!user) {

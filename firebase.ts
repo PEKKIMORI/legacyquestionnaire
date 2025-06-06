@@ -1,5 +1,6 @@
 import {initializeApp} from 'firebase/app';
 import {getFirestore} from 'firebase/firestore';
+import {getAuth, GoogleAuthProvider} from 'firebase/auth';
 import 'firebase/auth';
 
 const firebaseConfig = {
@@ -12,10 +13,17 @@ const firebaseConfig = {
   measurementId: "G-WVD6VRW1RH"
 };
 
-// Initialize Firebase
+//	Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
-export {db};
+// Configure Google provider to only allow specific domains
+googleProvider.setCustomParameters({
+  hd: 'minerva.edu' // This restricts to minerva.edu domain
+});
+
+export {db, auth, googleProvider};
 
 export default app;
