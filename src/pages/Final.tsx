@@ -84,13 +84,16 @@ const FinalPage: React.FC = () => {
             const selectedVibe = pool[Math.floor(Math.random() * pool.length)] ?? "unique";
             setVibe(selectedVibe);
 
-            // Save the results back to Firestore
+            // Save the results back to Firestore.
+            // displayCategory is the naive top-1 (shown to user immediately).
+            // affinityVector stores the full tally for batch allocation on allocation day.
+            // allocatedLegacy will be written later by the admin batch allocation API.
             try {
               await updateDoc(doc(db, "responses", responseDoc.id), {
                 results: {
-                  topCategory: highestCategory,
+                  displayCategory: highestCategory,
                   minervaVibe: selectedVibe,
-                  categoryTally: tally,
+                  affinityVector: tally,
                   calculatedAt: new Date()
                 },
                 completedAt: new Date(),

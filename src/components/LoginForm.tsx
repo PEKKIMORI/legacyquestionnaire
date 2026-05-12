@@ -43,7 +43,7 @@ const LoginForm: React.FC = () => {
   // Create response document with demographics
   const createResponseWithDemographics = async (
     user: User,
-    demographics: { gender: string; country: string; age: string },
+    demographics: { name: string; cohort: string; gender: string; country: string; age: string },
   ) => {
     try {
       // Double-check for existing response to avoid duplicates
@@ -53,6 +53,8 @@ const LoginForm: React.FC = () => {
       const newResponseData = {
         userId: user.uid,
         userEmail: sanitizeInput.email(user.email ?? ""),
+        userName: sanitizeInput.text(demographics.name),
+        cohort: sanitizeInput.text(demographics.cohort),
         startedAt: new Date(),
         lastUpdated: new Date(),
         demographics: {
@@ -124,6 +126,8 @@ const LoginForm: React.FC = () => {
   };
 
   const handleDemographicsSubmit = async (data: {
+    name: string;
+    cohort: string;
     gender: string;
     country: string;
     age: string;

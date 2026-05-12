@@ -10,15 +10,15 @@ import { animationVariants } from "~/utils/animationUtils";
  * - error: error message to display
  */
 interface DemographicsPopupProps {
-  onSubmit: (data: { gender: string; country: string; age: string }) => void;
+  onSubmit: (data: { name: string; cohort: string; gender: string; country: string; age: string }) => void;
   loading?: boolean;
   error?: string;
 }
 
 /**
  * DemographicsPopup
- * Modal card for collecting demographics info after signup.
- * Fields: Gender, Country, Age.
+ * Modal card for collecting user info after signup.
+ * Fields: Full Name, Cohort, Gender, Country, Age.
  * Calls onSubmit with the data when "Continue" is pressed.
  */
 const DemographicsPopup: React.FC<DemographicsPopupProps> = ({
@@ -26,20 +26,25 @@ const DemographicsPopup: React.FC<DemographicsPopupProps> = ({
   loading = false,
   error = "",
 }) => {
+  const [name, setName] = useState("");
+  const [cohort, setCohort] = useState("");
   const [gender, setGender] = useState("");
   const [country, setCountry] = useState("");
   const [age, setAge] = useState("");
   const [localError, setLocalError] = useState("");
 
+  const currentYear = new Date().getFullYear();
+  const cohortYears = Array.from({ length: 6 }, (_, i) => currentYear + i);
+
   // Validate and submit form
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!gender || !country || !age) {
+    if (!name || !cohort || !gender || !country || !age) {
       setLocalError("Please fill out all fields.");
       return;
     }
     setLocalError("");
-    onSubmit({ gender, country, age });
+    onSubmit({ name, cohort, gender, country, age });
   };
 
   return (
@@ -52,6 +57,37 @@ const DemographicsPopup: React.FC<DemographicsPopupProps> = ({
           Tell us about yourself
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block font-medium">Full Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded border border-gray-300 p-2"
+              placeholder="Your full name"
+              required
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block font-medium">Cohort</label>
+            <select
+              value={cohort}
+              onChange={(e) => setCohort(e.target.value)}
+              className="w-full rounded border border-gray-300 p-2"
+              required
+              disabled={loading}
+            >
+              <option value="">Select your cohort...</option>
+              {cohortYears.map((year) => (
+                <option key={year} value={String(year)}>
+                  Class of {year}
+                </option>
+              ))}
+              <option value="Staff">Staff</option>
+              <option value="Faculty">Faculty</option>
+            </select>
+          </div>
           <div>
             <label className="mb-1 block font-medium">Gender</label>
             <select

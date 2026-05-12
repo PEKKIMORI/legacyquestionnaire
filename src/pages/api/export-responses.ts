@@ -1,32 +1,6 @@
-// legacyquestionnaire/src/pages/api/export-responses.ts#L3-19
 import type { NextApiRequest, NextApiResponse } from "next";
-import admin from "firebase-admin";
-
-// Requires: npm install googleapis
+import { db, admin } from "~/utils/firebaseAdmin";
 import { google } from "googleapis";
-
-if (!admin.apps.length) {
-  // Use application default credentials on Firebase App Hosting (production)
-  // Use explicit credentials for local development or emulators
-  if (
-    process.env.FUNCTIONS_EMULATOR === "true" ||
-    process.env.NODE_ENV === "development"
-  ) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      }),
-    });
-  } else {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-  }
-}
-
-const db = admin.firestore();
 
 // Helper to fetch user name from Google People API by email
 async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
@@ -74,7 +48,9 @@ async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
 const CSV_COLUMNS = [
   "userId",
   "userName",
+  "cohort",
   "userEmail",
+  "allocatedLegacy",
   "sorting_group_0",
   "sorting_group_1",
   "sorting_group_2",
@@ -153,7 +129,8 @@ export default async function handler(
       const row = CSV_COLUMNS.map((col) => {
         let value;
         if (col === "userName") {
-          value = userName;
+          // Prefer self-reported name from Firestore; fall back to Auth lookup for legacy records
+          value = typeof data.userName === "string" && data.userName ? data.userName : userName;
         } else {
           value = data[col];
         }
