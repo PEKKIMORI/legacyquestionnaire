@@ -11,8 +11,15 @@ runConfig:
 env:
   # Configure environment variables.
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
+  # Firebase web config values are public client-side identifiers (they ship in
+  # the browser bundle), so they're stored as plaintext with BUILD availability
+  # rather than as secrets — the build needs them at module load to call
+  # initializeApp() while pre-rendering pages.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    secret: firebase-api-key
+    value: AIzaSyB-saN-elh1TmTOOxHOuQ5JDZtVos9oFHI
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     value: legacyquestionnaire-minerva.firebaseapp.com
     availability:
@@ -34,9 +41,15 @@ env:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    secret: firebase-app-id
+    value: "1:419708047516:web:05ab0de1c5a1c4ae5c5d59"
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-    secret: firebase-measurement-id
+    value: "G-WVD6VRW1RH"
+    availability:
+      - BUILD
+      - RUNTIME
 
   # Grant access to secrets in Cloud Secret Manager.
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
