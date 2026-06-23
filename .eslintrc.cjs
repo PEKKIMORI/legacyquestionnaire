@@ -1,5 +1,8 @@
 /** @type {import("eslint").Linter.Config} */
 const config = {
+  // Test files are linted/run separately via `npm test`; exclude them from the
+  // Next.js production build lint so they can't block deployment.
+  ignorePatterns: ["src/tests/**", "**/*.test.ts", "**/*.test.tsx"],
   parser: "@typescript-eslint/parser",
   parserOptions: {
     project: true,

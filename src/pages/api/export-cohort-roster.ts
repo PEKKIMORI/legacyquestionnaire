@@ -49,7 +49,7 @@ export default async function handler(
       const legacy = typeof data.allocatedLegacy === "string" ? data.allocatedLegacy : null;
 
       if (legacy && byLegacy[legacy] !== undefined) {
-        byLegacy[legacy]!.push(name);
+        byLegacy[legacy].push(name);
       }
     });
 
