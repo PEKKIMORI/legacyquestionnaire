@@ -51,7 +51,12 @@ env:
       - BUILD
       - RUNTIME
 
-  # Grant access to secrets in Cloud Secret Manager.
-  # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-  - variable: ADMIN_API_SECRET
-    secret: admin-api-secret
+  # Admin allowlist for the /super-secret page's export + allocation APIs.
+  # Comma-separated Minerva emails, compared case-insensitively against the
+  # signed-in user's verified Firebase ID token (see src/utils/verifyAdmin.ts).
+  # Not a secret — these are just identities; edit the list + roll out to change
+  # who has admin access.
+  - variable: ADMIN_EMAILS
+    value: "bo@uni.minerva.edu,branden@minerva.edu,karolina@uni.minerva.edu,nokchi1@uni.minerva.edu,rafael.belmonte@uni.minerva.edu"
+    availability:
+      - RUNTIME

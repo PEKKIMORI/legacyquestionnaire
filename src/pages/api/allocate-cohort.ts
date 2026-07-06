@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import crypto from "crypto";
 import { db } from "~/utils/firebaseAdmin";
 import { allocateCohort, type UserAffinity } from "~/utils/allocate";
+import { verifyAdmin } from "~/utils/verifyAdmin";
 
 type ResponseData =
   | {
@@ -23,21 +23,15 @@ export default async function handler(
     return;
   }
 
-  const { cohort, adminSecret } = req.body as {
-    cohort?: string;
-    adminSecret?: string;
-  };
-
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (
-    !adminSecret ||
-    !expected ||
-    adminSecret.length !== expected.length ||
-    !crypto.timingSafeEqual(Buffer.from(adminSecret), Buffer.from(expected))
-  ) {
-    res.status(401).json({ error: "Unauthorized" });
+  const auth = await verifyAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ error: auth.message });
     return;
   }
+
+  const { cohort } = req.body as {
+    cohort?: string;
+  };
 
   if (!cohort || typeof cohort !== "string") {
     res.status(400).json({ error: "cohort is required" });

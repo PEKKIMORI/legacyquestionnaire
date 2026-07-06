@@ -11,14 +11,16 @@ export async function callApiHandler(
     method?: RequestMethod;
     body?: Record<string, unknown>;
     query?: Record<string, string>;
+    headers?: Record<string, string>;
   } = {},
 ): Promise<{ status: number; data: unknown; headers: Record<string, unknown> }> {
-  const { method = "GET", body, query } = options;
+  const { method = "GET", body, query, headers } = options;
 
   const { req, res } = createMocks({
     method,
     body,
     query,
+    headers,
   });
 
   await handler(req as any, res as any);

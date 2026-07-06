@@ -1,54 +1,55 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import admin from "firebase-admin";
 import { clearFirestore } from "../helpers/firestore";
 import { callApiHandler } from "../helpers/api";
+import { adminAuthHeader, nonAdminAuthHeader } from "../helpers/auth";
 import { seedUser, seedCohort } from "../helpers/seed";
 import { LEGACIES } from "~/utils/allocate";
 import handler from "~/pages/api/allocate-cohort";
 
-const SECRET = "test-secret-for-emulator";
+let authHeaders: Record<string, string>;
 
 function getDb() {
   return admin.firestore();
 }
 
 describe("POST /api/allocate-cohort", () => {
+  beforeAll(async () => {
+    authHeaders = await adminAuthHeader();
+  });
+
   beforeEach(async () => {
     await clearFirestore();
   });
 
   // ── Auth tests ──────────────────────────────────────────────────────
 
-  it("rejects missing adminSecret with 401", async () => {
+  it("rejects request with no Authorization header with 401", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
       body: { cohort: "2029" },
     });
     expect(status).toBe(401);
-    expect(data).toEqual({ error: "Unauthorized" });
+    expect((data as Record<string, unknown>).error).toBeTruthy();
   });
 
-  it("rejects wrong adminSecret with 401", async () => {
-    const { status, data } = await callApiHandler(handler, {
+  it("rejects an invalid token with 401", async () => {
+    const { status } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: "wrong-secret" },
+      body: { cohort: "2029" },
+      headers: { authorization: "Bearer not-a-real-token" },
     });
     expect(status).toBe(401);
-    expect(data).toEqual({ error: "Unauthorized" });
   });
 
-  it("rejects when ADMIN_API_SECRET env is empty string", async () => {
-    const orig = process.env.ADMIN_API_SECRET;
-    process.env.ADMIN_API_SECRET = "";
-    try {
-      const { status } = await callApiHandler(handler, {
-        method: "POST",
-        body: { cohort: "2029", adminSecret: "" },
-      });
-      expect(status).toBe(401);
-    } finally {
-      process.env.ADMIN_API_SECRET = orig;
-    }
+  it("rejects a signed-in non-admin email with 403", async () => {
+    const { status, data } = await callApiHandler(handler, {
+      method: "POST",
+      body: { cohort: "2029" },
+      headers: await nonAdminAuthHeader(),
+    });
+    expect(status).toBe(403);
+    expect((data as Record<string, unknown>).error).toBeTruthy();
   });
 
   // ── Method / param validation ────────────────────────────────────────
@@ -56,7 +57,8 @@ describe("POST /api/allocate-cohort", () => {
   it("rejects GET with 405", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "2029", adminSecret: SECRET },
+      query: { cohort: "2029" },
+      headers: authHeaders,
     });
     expect(status).toBe(405);
     expect(data).toEqual({ error: "Method not allowed" });
@@ -65,7 +67,8 @@ describe("POST /api/allocate-cohort", () => {
   it("rejects POST without cohort with 400", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { adminSecret: SECRET },
+      body: {},
+      headers: authHeaders,
     });
     expect(status).toBe(400);
     expect(data).toEqual({ error: "cohort is required" });
@@ -76,7 +79,8 @@ describe("POST /api/allocate-cohort", () => {
   it("returns totalUsers 0 for empty cohort", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "nonexistent", adminSecret: SECRET },
+      body: { cohort: "nonexistent" },
+      headers: authHeaders,
     });
     expect(status).toBe(200);
     const d = data as Record<string, unknown>;
@@ -91,7 +95,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -128,7 +133,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -141,7 +147,7 @@ describe("POST /api/allocate-cohort", () => {
 
     // Balance: ceil(75/25) = 3
     const maxPerLegacy = Math.ceil(75 / 25);
-    for (const [legacy, count] of Object.entries(allocations)) {
+    for (const [, count] of Object.entries(allocations)) {
       expect(count).toBeLessThanOrEqual(maxPerLegacy);
     }
 
@@ -167,7 +173,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -203,7 +210,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -235,7 +243,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -253,7 +262,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -275,14 +285,16 @@ describe("POST /api/allocate-cohort", () => {
     // First allocation
     const { status: s1 } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
     expect(s1).toBe(200);
 
     // Second allocation
     const { status: s2, data: d2 } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
     expect(s2).toBe(200);
     expect((d2 as Record<string, unknown>).totalUsers).toBe(10);
@@ -295,7 +307,8 @@ describe("POST /api/allocate-cohort", () => {
 
     const { data } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     const d = data as Record<string, unknown>;
@@ -333,9 +346,10 @@ describe("POST /api/allocate-cohort", () => {
       affinityVector: { Circuit: 20, Cable: 1, Chronicle: 1 },
     });
 
-    const { status, data } = await callApiHandler(handler, {
+    const { status } = await callApiHandler(handler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);

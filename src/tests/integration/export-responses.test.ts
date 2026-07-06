@@ -1,18 +1,43 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import { clearFirestore } from "../helpers/firestore";
 import { callApiHandler } from "../helpers/api";
+import { adminAuthHeader, nonAdminAuthHeader } from "../helpers/auth";
 import { seedUser, seedCohort } from "../helpers/seed";
 import handler from "~/pages/api/export-responses";
 
+let authHeaders: Record<string, string>;
+
 describe("GET /api/export-responses", () => {
+  beforeAll(async () => {
+    authHeaders = await adminAuthHeader();
+  });
+
   beforeEach(async () => {
     await clearFirestore();
+  });
+
+  // ── Auth tests ──────────────────────────────────────────────────────
+
+  it("rejects request with no Authorization header with 401", async () => {
+    const { status } = await callApiHandler(handler, { method: "GET" });
+    expect(status).toBe(401);
+  });
+
+  it("rejects a signed-in non-admin email with 403", async () => {
+    const { status } = await callApiHandler(handler, {
+      method: "GET",
+      headers: await nonAdminAuthHeader(),
+    });
+    expect(status).toBe(403);
   });
 
   // ── Empty collection ───────────────────────────────────────────────
 
   it("returns 'No data found' for empty collection", async () => {
-    const { status, data } = await callApiHandler(handler, { method: "GET" });
+    const { status, data } = await callApiHandler(handler, {
+      method: "GET",
+      headers: authHeaders,
+    });
     expect(status).toBe(200);
     expect(data).toBe("No data found");
   });
@@ -31,6 +56,7 @@ describe("GET /api/export-responses", () => {
 
     const { status, data, headers } = await callApiHandler(handler, {
       method: "GET",
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -61,7 +87,10 @@ describe("GET /api/export-responses", () => {
   it("exports CSV with 5 data rows for 5 users", async () => {
     await seedCohort({ cohort: "2029", count: 5, seed: 150 });
 
-    const { data } = await callApiHandler(handler, { method: "GET" });
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      headers: authHeaders,
+    });
 
     const csv = data as string;
     const lines = csv.trim().split("\n");
@@ -81,7 +110,10 @@ describe("GET /api/export-responses", () => {
       allocatedLegacy: "Cable",
     });
 
-    const { data } = await callApiHandler(handler, { method: "GET" });
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      headers: authHeaders,
+    });
 
     const csv = data as string;
     const header = csv.split("\n")[0]!;
@@ -101,7 +133,10 @@ describe("GET /api/export-responses", () => {
       affinityVector: { Cable: 5 },
     });
 
-    const { data } = await callApiHandler(handler, { method: "GET" });
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      headers: authHeaders,
+    });
 
     const csv = data as string;
     expect(csv).toContain("Self Reported Name");
@@ -119,7 +154,10 @@ describe("GET /api/export-responses", () => {
       // no allocatedLegacy
     });
 
-    const { status, data } = await callApiHandler(handler, { method: "GET" });
+    const { status, data } = await callApiHandler(handler, {
+      method: "GET",
+      headers: authHeaders,
+    });
 
     expect(status).toBe(200);
     const csv = data as string;

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { db, admin } from "~/utils/firebaseAdmin";
 import { google } from "googleapis";
+import { verifyAdmin } from "~/utils/verifyAdmin";
 
 // Helper to fetch user name from Google People API by email
 async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
@@ -66,6 +67,12 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  const auth = await verifyAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).send(auth.message);
+    return;
+  }
+
   try {
     const snapshot = await db
       .collection("responses")
