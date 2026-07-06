@@ -1,27 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import crypto from "crypto";
 import { db } from "~/utils/firebaseAdmin";
 import { LEGACIES } from "~/utils/allocate";
+import { verifyAdmin } from "~/utils/verifyAdmin";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { cohort, adminSecret } = req.query;
-
-  // Auth check — same secret as allocate-cohort, passed as query param for GET
-  const expected = process.env.ADMIN_API_SECRET ?? "";
-  if (
-    !adminSecret ||
-    typeof adminSecret !== "string" ||
-    !expected ||
-    adminSecret.length !== expected.length ||
-    !crypto.timingSafeEqual(Buffer.from(adminSecret), Buffer.from(expected))
-  ) {
-    res.status(401).send("Unauthorized");
+  const auth = await verifyAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).send(auth.message);
     return;
   }
 
+  const { cohort } = req.query;
   if (!cohort || typeof cohort !== "string") {
     res.status(400).send("cohort query parameter is required");
     return;

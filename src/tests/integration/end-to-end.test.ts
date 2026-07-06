@@ -1,19 +1,24 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import admin from "firebase-admin";
 import { clearFirestore } from "../helpers/firestore";
 import { callApiHandler } from "../helpers/api";
+import { adminAuthHeader } from "../helpers/auth";
 import { seedCohort } from "../helpers/seed";
 import allocateHandler from "~/pages/api/allocate-cohort";
 import rosterHandler from "~/pages/api/export-cohort-roster";
 import exportHandler from "~/pages/api/export-responses";
 
-const SECRET = "test-secret-for-emulator";
+let authHeaders: Record<string, string>;
 
 function getDb() {
   return admin.firestore();
 }
 
 describe("Cross-endpoint integration", () => {
+  beforeAll(async () => {
+    authHeaders = await adminAuthHeader();
+  });
+
   beforeEach(async () => {
     await clearFirestore();
   });
@@ -28,7 +33,8 @@ describe("Cross-endpoint integration", () => {
       allocateHandler,
       {
         method: "POST",
-        body: { cohort: "2029", adminSecret: SECRET },
+        body: { cohort: "2029" },
+        headers: authHeaders,
       },
     );
     expect(allocStatus).toBe(200);
@@ -40,7 +46,8 @@ describe("Cross-endpoint integration", () => {
       rosterHandler,
       {
         method: "GET",
-        query: { cohort: "2029", adminSecret: SECRET },
+        query: { cohort: "2029" },
+        headers: authHeaders,
       },
     );
     expect(rosterStatus).toBe(200);
@@ -75,14 +82,15 @@ describe("Cross-endpoint integration", () => {
     // Allocate
     const { status: allocStatus } = await callApiHandler(allocateHandler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
     expect(allocStatus).toBe(200);
 
     // Export all responses
     const { status: exportStatus, data: exportData } = await callApiHandler(
       exportHandler,
-      { method: "GET" },
+      { method: "GET", headers: authHeaders },
     );
     expect(exportStatus).toBe(200);
 
@@ -107,9 +115,10 @@ describe("Cross-endpoint integration", () => {
     const userIds = await seedCohort({ cohort: "2029", count: 10, seed: 920 });
 
     // First allocation
-    const { status: s1, data: d1 } = await callApiHandler(allocateHandler, {
+    const { status: s1 } = await callApiHandler(allocateHandler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
     expect(s1).toBe(200);
 
@@ -143,7 +152,8 @@ describe("Cross-endpoint integration", () => {
     // Re-allocate
     const { status: s2, data: d2 } = await callApiHandler(allocateHandler, {
       method: "POST",
-      body: { cohort: "2029", adminSecret: SECRET },
+      body: { cohort: "2029" },
+      headers: authHeaders,
     });
     expect(s2).toBe(200);
     expect((d2 as Record<string, unknown>).totalUsers).toBe(10);

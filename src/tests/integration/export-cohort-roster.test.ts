@@ -1,34 +1,49 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import { clearFirestore } from "../helpers/firestore";
 import { callApiHandler } from "../helpers/api";
+import { adminAuthHeader, nonAdminAuthHeader } from "../helpers/auth";
 import { seedUser, seedAllocatedCohort } from "../helpers/seed";
 import { LEGACIES } from "~/utils/allocate";
 import handler from "~/pages/api/export-cohort-roster";
 
-const SECRET = "test-secret-for-emulator";
+let authHeaders: Record<string, string>;
 
 describe("GET /api/export-cohort-roster", () => {
+  beforeAll(async () => {
+    authHeaders = await adminAuthHeader();
+  });
+
   beforeEach(async () => {
     await clearFirestore();
   });
 
   // ── Auth tests ──────────────────────────────────────────────────────
 
-  it("rejects missing adminSecret with 401", async () => {
+  it("rejects request with no Authorization header with 401", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "GET",
       query: { cohort: "2029" },
     });
     expect(status).toBe(401);
-    expect(data).toBe("Unauthorized");
+    expect(data).toContain("Authorization");
   });
 
-  it("rejects wrong adminSecret with 401", async () => {
+  it("rejects an invalid token with 401", async () => {
     const { status } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "2029", adminSecret: "wrong" },
+      query: { cohort: "2029" },
+      headers: { authorization: "Bearer not-a-real-token" },
     });
     expect(status).toBe(401);
+  });
+
+  it("rejects a signed-in non-admin email with 403", async () => {
+    const { status } = await callApiHandler(handler, {
+      method: "GET",
+      query: { cohort: "2029" },
+      headers: await nonAdminAuthHeader(),
+    });
+    expect(status).toBe(403);
   });
 
   // ── Param validation ───────────────────────────────────────────────
@@ -36,7 +51,8 @@ describe("GET /api/export-cohort-roster", () => {
   it("rejects missing cohort with 400", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "GET",
-      query: { adminSecret: SECRET },
+      query: {},
+      headers: authHeaders,
     });
     expect(status).toBe(400);
     expect(data).toBe("cohort query parameter is required");
@@ -47,7 +63,8 @@ describe("GET /api/export-cohort-roster", () => {
   it("returns message for empty cohort", async () => {
     const { status, data } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "nonexistent", adminSecret: SECRET },
+      query: { cohort: "nonexistent" },
+      headers: authHeaders,
     });
     expect(status).toBe(200);
     expect(data).toContain("No completed responses found");
@@ -60,7 +77,8 @@ describe("GET /api/export-cohort-roster", () => {
 
     const { status, data, headers } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "2029", adminSecret: SECRET },
+      query: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -103,7 +121,8 @@ describe("GET /api/export-cohort-roster", () => {
 
     const { status, data } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "2029", adminSecret: SECRET },
+      query: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     expect(status).toBe(200);
@@ -133,7 +152,8 @@ describe("GET /api/export-cohort-roster", () => {
 
     const { data } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "2029", adminSecret: SECRET },
+      query: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     const csv = data as string;
@@ -152,7 +172,8 @@ describe("GET /api/export-cohort-roster", () => {
 
     const { data } = await callApiHandler(handler, {
       method: "GET",
-      query: { cohort: "2029", adminSecret: SECRET },
+      query: { cohort: "2029" },
+      headers: authHeaders,
     });
 
     const csv = data as string;
