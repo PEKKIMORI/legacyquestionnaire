@@ -122,12 +122,14 @@ const MainSection: React.FC = () => {
             <div
               className="mb-2 cursor-pointer select-none text-2xl"
               onClick={handleHeartClick}
-              title="Click me 10 times!"
+              title={
+                "M23 Jacob, Haitham & Eric\nM25 Seoyoung & Matvii\nM27 Boss & Karolina\nM28 Rafael & Noku"
+              }
             >
               ❤️
             </div>
             <div className="mb-1">for Minerva University</div>
-            <div className="text-sm italic">- Rafael, M28</div>
+            <div className="text-sm italic">- Vibe Check Crew</div>
           </div>
         </motion.div>
       </motion.div>
