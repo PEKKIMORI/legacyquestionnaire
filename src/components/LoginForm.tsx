@@ -40,6 +40,34 @@ const LoginForm: React.FC = () => {
     }
   };
 
+  // Route a returning user to wherever they actually left off, so finished
+  // users land on their (stored) vibe instead of being walked back through
+  // the questionnaire.
+  const routeByProgress = async (uid: string): Promise<boolean> => {
+    const responsesCollection = collection(db, "responses");
+    const q = query(responsesCollection, where("userId", "==", uid));
+    const querySnapshot = await getDocs(q);
+    const existingDoc = querySnapshot.docs[0];
+    if (!existingDoc) return false;
+
+    const data = existingDoc.data() as {
+      isCompleted?: boolean;
+      sortingCompleted?: boolean;
+      questionsCompleted?: boolean;
+    };
+
+    if (data.isCompleted === true || data.sortingCompleted === true) {
+      // Finished (or finished sorting and only missing the final compute,
+      // which /Final performs once): show their vibe.
+      await router.push("/Final");
+    } else if (data.questionsCompleted) {
+      await router.push(`/sorting?responseId=${existingDoc.id}`);
+    } else {
+      await router.push("/questions/1");
+    }
+    return true;
+  };
+
   // Create response document with demographics
   const createResponseWithDemographics = async (
     user: User,
@@ -87,12 +115,9 @@ const LoginForm: React.FC = () => {
 
       // Check if the email domain is allowed
       if (user.email && validateEmail(user.email)) {
-        const exists = await checkResponseExists(user.uid);
-        if (exists) {
-          // Already filled demographics, go to questionnaire
-          await router.push("/questions/1");
-        } else {
-          // Show demographics popup
+        const routed = await routeByProgress(user.uid);
+        if (!routed) {
+          // No response document yet - show demographics popup
           setPendingUser(user);
           setShowDemographics(true);
         }
