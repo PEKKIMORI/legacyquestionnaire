@@ -30,6 +30,17 @@ const FinalPage: React.FC = () => {
           if (responseDoc) {
             const data = responseDoc.data();
 
+            // The vibe is assigned exactly once, at first completion. If it
+            // already exists, show the stored one and never recompute — a
+            // person's vibe must not change when they revisit this page.
+            const existingResults = data.results as
+              | { minervaVibe?: string }
+              | undefined;
+            if (existingResults?.minervaVibe) {
+              setVibe(existingResults.minervaVibe);
+              return;
+            }
+
             const tally: Record<string, number> = {};
               // Count answers from the new structure
             Object.keys(data).forEach((key) => {

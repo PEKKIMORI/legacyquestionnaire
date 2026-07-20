@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { auth, db } from "../../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { animationVariants, interactions } from "~/utils/animationUtils";
 import {
   DndContext,
@@ -57,6 +57,36 @@ const SortingPage: React.FC = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const autoScrollInterval = useRef<NodeJS.Timeout | null>(null);
+  const resumedRef = useRef(false);
+
+  // Returning users resume at their first unfinished group instead of
+  // restarting from group 0 (their earlier rankings are already saved).
+  useEffect(() => {
+    const resume = async () => {
+      if (resumedRef.current) return;
+      if (!user || !responseId || legacyGroups.length === 0) return;
+      resumedRef.current = true;
+      try {
+        const snapshot = await getDoc(
+          doc(db, "responses", responseId as string),
+        );
+        if (!snapshot.exists()) return;
+        const data = snapshot.data() as Record<string, unknown>;
+        let firstUnfinished = 0;
+        while (
+          firstUnfinished < legacyGroups.length &&
+          data[`sorting_group_${firstUnfinished}`] !== undefined
+        ) {
+          firstUnfinished++;
+        }
+        const target = Math.min(firstUnfinished, legacyGroups.length - 1);
+        if (target > 0) setCurrentGroupIndex(target);
+      } catch (error) {
+        console.error("Error resuming sorting progress:", error);
+      }
+    };
+    void resume();
+  }, [user, responseId, legacyGroups]);
 
   useEffect(() => {
     if (legacies.length > 0) {
