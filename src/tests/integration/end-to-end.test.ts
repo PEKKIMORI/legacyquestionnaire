@@ -60,9 +60,11 @@ describe("Cross-endpoint integration", () => {
     expect(dataRows.length).toBe(50);
 
     // Legacy distribution in roster matches allocate-cohort response
+    const LEGACY_COL = lines[0]!.split(",").indexOf("Allocated Legacy");
+    expect(LEGACY_COL).toBeGreaterThan(-1);
     const rosterCounts: Record<string, number> = {};
     for (const row of dataRows) {
-      const legacy = row.split(",")[0]!;
+      const legacy = row.split(",")[LEGACY_COL]!;
       rosterCounts[legacy] = (rosterCounts[legacy] ?? 0) + 1;
     }
 
