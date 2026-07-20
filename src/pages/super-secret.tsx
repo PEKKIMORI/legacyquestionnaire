@@ -479,13 +479,7 @@ const SuperSecretPage: React.FC = () => {
                   once and stored — it never changes on later visits.
                 </p>
                 <p>
-                  <strong>3. Credo sorting.</strong> The drag-and-drop credo
-                  rankings are collected and stored, but are{" "}
-                  <strong>not currently part of the scoring</strong> — vibes and
-                  allocations come from the questions only.
-                </p>
-                <p>
-                  <strong>4. Allocation (admin-run).</strong> The allocator
+                  <strong>3. Allocation (admin-run).</strong> The allocator
                   balances the cohort across all 25 legacies (sizes within one
                   person of each other). People with the strongest single-legacy
                   preference are placed first; everyone gets the highest-ranked
@@ -495,7 +489,7 @@ const SuperSecretPage: React.FC = () => {
                   their own preference order.
                 </p>
                 <p>
-                  <strong>5. Re-running allocation reshuffles.</strong> Each run
+                  <strong>4. Re-running allocation reshuffles.</strong> Each run
                   re-allocates the whole cohort from scratch, so assignments can
                   change between runs as new responses arrive. Treat allocation
                   as final only when responses have closed.
