@@ -67,7 +67,7 @@ describe("GET /api/export-cohort-roster", () => {
       headers: authHeaders,
     });
     expect(status).toBe(200);
-    expect(data).toContain("No completed responses found");
+    expect(data).toContain("No responses found");
   });
 
   // ── Normal roster ──────────────────────────────────────────────────
@@ -89,22 +89,56 @@ describe("GET /api/export-cohort-roster", () => {
     const lines = csv.trim().split("\n");
 
     // Header row
-    expect(lines[0]).toBe("Legacy,Name");
+    expect(lines[0]).toBe(
+      "Name,Email,Cohort,Gender,Country,Age,Status,Vibe,Top Legacy,Allocated Legacy,Assigned Rank,Completed At,Allocated At",
+    );
+    const LEGACY_COL = 9;
 
     // 10 data rows
     const dataRows = lines.slice(1);
     expect(dataRows.length).toBe(10);
 
-    // Each row's legacy is valid
+    // Each row's legacy is valid and status is Allocated
     for (const row of dataRows) {
-      const legacy = row.split(",")[0]!;
-      expect(LEGACIES as readonly string[]).toContain(legacy);
+      const cols = row.split(",");
+      expect(LEGACIES as readonly string[]).toContain(cols[LEGACY_COL]!);
+      expect(cols[6]).toBe("Allocated");
     }
 
     // Rows should be sorted by legacy then name
-    const legacyOrder = dataRows.map((r) => r.split(",")[0]!);
+    const legacyOrder = dataRows.map((r) => r.split(",")[LEGACY_COL]!);
     const sortedLegacyOrder = [...legacyOrder].sort();
     expect(legacyOrder).toEqual(sortedLegacyOrder);
+  });
+
+  // ── Demographics and derived rank ──────────────────────────────────
+
+  it("includes demographics and the derived assigned rank", async () => {
+    await seedUser({
+      userId: "demo-user",
+      userName: "Demo User",
+      cohort: "2029",
+      isCompleted: true,
+      affinityVector: { Cable: 10, Ocean: 5 },
+      allocatedLegacy: "Ocean",
+      demographics: { gender: "Woman", country: "Zimbabwe", ageRange: "18-24" },
+    });
+
+    const { status, data } = await callApiHandler(handler, {
+      method: "GET",
+      query: { cohort: "2029" },
+      headers: authHeaders,
+    });
+
+    expect(status).toBe(200);
+    const row = (data as string).trim().split("\n")[1]!;
+    const cols = row.split(",");
+    expect(cols[3]).toBe("Woman");
+    expect(cols[4]).toBe("Zimbabwe");
+    expect(cols[5]).toBe("18-24");
+    // Cable scored highest but Ocean was allocated -> rank 2
+    expect(cols[9]).toBe("Ocean");
+    expect(cols[10]).toBe("2");
   });
 
   // ── CSV escaping ───────────────────────────────────────────────────
@@ -131,23 +165,30 @@ describe("GET /api/export-cohort-roster", () => {
     expect(csv).toContain(`"O'Brien, Pat"`);
   });
 
-  // ── Unallocated users excluded ─────────────────────────────────────
+  // ── Everyone appears, with status ──────────────────────────────────
 
-  it("excludes users without allocatedLegacy", async () => {
+  it("includes unallocated and incomplete users with their status", async () => {
     await seedUser({
       userId: "allocated-user",
-      userName: "Allocated",
+      userName: "Ada Allocated",
       cohort: "2029",
       isCompleted: true,
       affinityVector: { Cable: 10 },
       allocatedLegacy: "Cable",
     });
     await seedUser({
-      userId: "unallocated-user",
-      userName: "Not Allocated",
+      userId: "awaiting-user",
+      userName: "Amy Awaiting",
       cohort: "2029",
       isCompleted: true,
       affinityVector: { Cable: 10 },
+    });
+    await seedUser({
+      userId: "incomplete-user",
+      userName: "Ian Incomplete",
+      cohort: "2029",
+      isCompleted: false,
+      affinityVector: {},
     });
 
     const { data } = await callApiHandler(handler, {
@@ -158,10 +199,17 @@ describe("GET /api/export-cohort-roster", () => {
 
     const csv = data as string;
     const lines = csv.trim().split("\n");
-    // Header + 1 data row (only the allocated user)
-    expect(lines.length).toBe(2);
-    expect(csv).toContain("Allocated");
-    expect(csv).not.toContain("Not Allocated");
+    // Header + all 3 responses: nobody silently disappears
+    expect(lines.length).toBe(4);
+    expect(csv).toContain("Ada Allocated");
+    expect(csv).toContain("Amy Awaiting");
+    expect(csv).toContain("Ian Incomplete");
+
+    const statusOf = (name: string) =>
+      lines.find((l) => l.includes(name))!.split(",")[6];
+    expect(statusOf("Ada Allocated")).toBe("Allocated");
+    expect(statusOf("Amy Awaiting")).toBe("Awaiting allocation");
+    expect(statusOf("Ian Incomplete")).toBe("Incomplete");
   });
 
   // ── Cohort isolation ───────────────────────────────────────────────

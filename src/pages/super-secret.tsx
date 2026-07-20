@@ -6,6 +6,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth, googleProvider } from "../../firebase";
+import type { CohortOverview } from "./api/cohort-overview";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const COHORT_YEARS = Array.from({ length: 6 }, (_, i) => String(CURRENT_YEAR + i));
@@ -23,6 +24,9 @@ const SuperSecretPage: React.FC = () => {
     skipped: number;
   } | null>(null);
   const [allocationError, setAllocationError] = useState("");
+  const [overview, setOverview] = useState<CohortOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -97,6 +101,27 @@ const SuperSecretPage: React.FC = () => {
     }
   };
 
+  const handleLoadOverview = async () => {
+    setOverviewLoading(true);
+    setOverviewError("");
+    try {
+      const res = await authedFetch(
+        `/api/cohort-overview?cohort=${encodeURIComponent(selectedCohort)}`,
+      );
+      if (!res.ok) {
+        setOverviewError(`Failed to load overview: ${await res.text()}`);
+        setOverview(null);
+        return;
+      }
+      setOverview((await res.json()) as CohortOverview);
+    } catch {
+      setOverviewError("You must be signed in as an admin.");
+      setOverview(null);
+    } finally {
+      setOverviewLoading(false);
+    }
+  };
+
   const handleRunAllocation = async () => {
     const confirmed = window.confirm(
       `This will run batch legacy allocation for cohort ${selectedCohort} and overwrite any existing allocations. Continue?`,
@@ -134,7 +159,7 @@ const SuperSecretPage: React.FC = () => {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-200 to-purple-200 p-6">
-      <div className="w-full max-w-2xl rounded-3xl border-2 border-yellow-400 bg-white/95 p-12 shadow-2xl backdrop-blur-lg">
+      <div className="w-full max-w-5xl rounded-3xl border-2 border-yellow-400 bg-white/95 p-12 shadow-2xl backdrop-blur-lg">
         <p className="mb-6 text-center text-xl text-gray-700">
           Congratulations! You&apos;ve unlocked the{" "}
           <span className="font-semibold text-pink-600">super secret</span>{" "}
@@ -262,6 +287,221 @@ const SuperSecretPage: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Cohort overview dashboard */}
+            <div className="mt-10 rounded-2xl border border-gray-200 bg-gray-50 p-6">
+              <h2 className="mb-4 text-center text-lg font-bold text-gray-800">
+                Cohort Overview
+              </h2>
+
+              <div className="flex justify-center">
+                <button
+                  onClick={handleLoadOverview}
+                  disabled={overviewLoading}
+                  className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 px-6 py-2 font-bold text-white shadow hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50"
+                >
+                  {overviewLoading
+                    ? "Loading..."
+                    : `Load Overview for ${selectedCohort}`}
+                </button>
+              </div>
+
+              {overviewError && (
+                <p className="mt-3 text-center text-sm text-red-600">
+                  {overviewError}
+                </p>
+              )}
+
+              {overview && (
+                <div className="mt-6 space-y-6">
+                  {/* Headline counts */}
+                  <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-5">
+                    {(
+                      [
+                        ["Responses", overview.counts.total],
+                        ["Complete", overview.counts.complete],
+                        ["Incomplete", overview.counts.incomplete],
+                        ["Allocated", overview.counts.allocated],
+                        ["Awaiting", overview.counts.awaiting],
+                      ] as const
+                    ).map(([label, value]) => (
+                      <div
+                        key={label}
+                        className="rounded-xl border border-gray-200 bg-white p-3"
+                      >
+                        <div className="text-2xl font-bold text-gray-800">
+                          {value}
+                        </div>
+                        <div className="text-xs text-gray-500">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {overview.counts.allocated > 0 && (
+                    <p className="text-center text-sm text-gray-600">
+                      Of allocated members: {(overview.top1Rate * 100).toFixed(1)}%
+                      got their top legacy, {(overview.top3Rate * 100).toFixed(1)}%
+                      got a top-3 legacy.
+                    </p>
+                  )}
+
+                  {/* Legacy sizes */}
+                  {overview.counts.allocated > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-bold text-gray-700">
+                        Members per legacy
+                      </h3>
+                      <div className="grid grid-cols-3 gap-1 text-xs text-gray-700 sm:grid-cols-5">
+                        {Object.entries(overview.legacyCounts)
+                          .sort((a, b) => a[0].localeCompare(b[0]))
+                          .map(([legacy, count]) => (
+                            <span key={legacy}>
+                              {legacy}: <strong>{count}</strong>
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Per-user table */}
+                  <div>
+                    <h3 className="mb-2 text-sm font-bold text-gray-700">
+                      Everyone in {overview.cohort} ({overview.users.length})
+                    </h3>
+                    <div className="max-h-96 overflow-auto rounded-xl border border-gray-200 bg-white">
+                      <table className="w-full text-left text-xs">
+                        <thead className="sticky top-0 bg-gray-100 text-gray-600">
+                          <tr>
+                            <th className="p-2">Name</th>
+                            <th className="p-2">Status</th>
+                            <th className="p-2">Vibe</th>
+                            <th className="p-2">Top 3 legacies (score)</th>
+                            <th className="p-2">Allocated</th>
+                            <th className="p-2">Rank</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {overview.users.map((u) => (
+                            <tr
+                              key={u.email || u.name}
+                              className="border-t border-gray-100"
+                            >
+                              <td className="p-2 font-medium text-gray-800">
+                                {u.name}
+                                <div className="font-normal text-gray-400">
+                                  {u.email}
+                                </div>
+                              </td>
+                              <td className="p-2">
+                                <span
+                                  className={
+                                    u.status === "Allocated"
+                                      ? "text-green-700"
+                                      : u.status === "Awaiting allocation"
+                                        ? "text-amber-700"
+                                        : "text-gray-400"
+                                  }
+                                >
+                                  {u.status}
+                                </span>
+                              </td>
+                              <td className="p-2">{u.vibe || "—"}</td>
+                              <td className="p-2">
+                                {u.topLegacies.length > 0
+                                  ? u.topLegacies
+                                      .map((t) => `${t.legacy} (${t.score})`)
+                                      .join(", ")
+                                  : "—"}
+                              </td>
+                              <td className="p-2 font-semibold">
+                                {u.allocatedLegacy || "—"}
+                              </td>
+                              <td className="p-2">{u.assignedRank ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Allocation run history */}
+                  <div>
+                    <h3 className="mb-2 text-sm font-bold text-gray-700">
+                      Allocation run history
+                    </h3>
+                    {overview.runs.length === 0 ? (
+                      <p className="text-xs text-gray-500">
+                        No allocation runs recorded yet. (Runs are logged from
+                        now on — older runs predate the log.)
+                      </p>
+                    ) : (
+                      <ul className="space-y-1 text-xs text-gray-700">
+                        {overview.runs.map((run) => (
+                          <li
+                            key={run.runAt}
+                            className="rounded-lg border border-gray-200 bg-white p-2"
+                          >
+                            <strong>
+                              {run.runAt
+                                ? new Date(run.runAt).toLocaleString()
+                                : "(unknown time)"}
+                            </strong>{" "}
+                            by {run.runBy || "(unknown)"} — {run.allocated}{" "}
+                            allocated
+                            {run.skipped > 0 && `, ${run.skipped} skipped`}, top-1{" "}
+                            {(run.top1Rate * 100).toFixed(0)}%, top-3{" "}
+                            {(run.top3Rate * 100).toFixed(0)}%
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* How it works */}
+            <details className="mt-10 rounded-2xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-700">
+              <summary className="cursor-pointer text-center text-lg font-bold text-gray-800">
+                How the vibe check works
+              </summary>
+              <div className="mt-4 space-y-3">
+                <p>
+                  <strong>1. Questions → affinity scores.</strong> Each
+                  multiple-choice answer adds one point to one of the 25
+                  legacies. A person&apos;s full point tally is their
+                  &ldquo;affinity vector.&rdquo;
+                </p>
+                <p>
+                  <strong>2. Vibe.</strong> When someone finishes, their
+                  highest-scoring legacy is found and their vibe word is drawn
+                  from that legacy&apos;s three-word pool. The vibe is assigned
+                  once and stored — it never changes on later visits.
+                </p>
+                <p>
+                  <strong>3. Credo sorting.</strong> The drag-and-drop credo
+                  rankings are collected and stored, but are{" "}
+                  <strong>not currently part of the scoring</strong> — vibes and
+                  allocations come from the questions only.
+                </p>
+                <p>
+                  <strong>4. Allocation (admin-run).</strong> The allocator
+                  balances the cohort across all 25 legacies (sizes within one
+                  person of each other). People with the strongest single-legacy
+                  preference are placed first; everyone gets the highest-ranked
+                  legacy that still has room. That is why someone&apos;s
+                  assigned legacy can differ from their top-scored legacy — the
+                  &ldquo;Rank&rdquo; column shows where their assignment sat in
+                  their own preference order.
+                </p>
+                <p>
+                  <strong>5. Re-running allocation reshuffles.</strong> Each run
+                  re-allocates the whole cohort from scratch, so assignments can
+                  change between runs as new responses arrive. Treat allocation
+                  as final only when responses have closed.
+                </p>
+              </div>
+            </details>
           </>
         )}
       </div>

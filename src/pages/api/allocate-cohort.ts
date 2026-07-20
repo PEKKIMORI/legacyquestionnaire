@@ -96,6 +96,25 @@ export default async function handler(
       await batch.commit();
     }
 
+    // Audit log: record who ran the allocation and what it produced, so
+    // admins can see what changed between runs. Does not affect allocation.
+    try {
+      await db.collection("allocationRuns").add({
+        cohort,
+        runAt: new Date(),
+        runBy: auth.email,
+        totalCompletedResponses: users.length,
+        allocated: summary.allocations.length,
+        skipped: summary.skipped.length,
+        legacyCounts: summary.legacyCounts,
+        top1Rate: summary.top1Rate,
+        top3Rate: summary.top3Rate,
+      });
+    } catch (logError) {
+      // A failed audit write should not fail the allocation itself.
+      console.error("Failed to record allocation run:", logError);
+    }
+
     res.status(200).json({
       cohort,
       totalUsers: summary.allocations.length,
