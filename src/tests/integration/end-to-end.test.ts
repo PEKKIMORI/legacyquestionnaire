@@ -64,7 +64,8 @@ describe("Cross-endpoint integration", () => {
     expect(LEGACY_COL).toBeGreaterThan(-1);
     const rosterCounts: Record<string, number> = {};
     for (const row of dataRows) {
-      const legacy = row.split(",")[LEGACY_COL]!;
+      // Cells are annotated, e.g. "Union (3rd choice)" / "Union (unranked)"
+      const legacy = row.split(",")[LEGACY_COL]!.replace(/ \(.*\)$/, "");
       rosterCounts[legacy] = (rosterCounts[legacy] ?? 0) + 1;
     }
 

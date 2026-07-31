@@ -339,9 +339,12 @@ const SuperSecretPage: React.FC = () => {
 
                   {overview.counts.allocated > 0 && (
                     <p className="text-center text-sm text-gray-600">
-                      Of allocated members: {(overview.top1Rate * 100).toFixed(1)}%
-                      got their top legacy, {(overview.top3Rate * 100).toFixed(1)}%
-                      got a top-3 legacy.
+                      Of allocated members:{" "}
+                      {(overview.top1Rate * 100).toFixed(1)}% (
+                      {overview.top1Count}/{overview.rankedCount}) got their top
+                      choice, {(overview.top3Rate * 100).toFixed(1)}% (
+                      {overview.top3Count}/{overview.rankedCount}) got a top-3
+                      choice.
                     </p>
                   )}
 

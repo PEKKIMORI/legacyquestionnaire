@@ -90,36 +90,40 @@ describe("GET /api/export-cohort-roster", () => {
 
     // Header row
     expect(lines[0]).toBe(
-      "Name,Email,Cohort,Gender,Country,Age,Status,Vibe,Top Legacy,Allocated Legacy,Assigned Rank,Completed At,Allocated At",
+      "Name,Email,Cohort,Gender,Country,Age,Status,Vibe,Top Legacy,2nd Choice,3rd Choice,4th Choice,5th Choice,Allocated Legacy,Assigned Rank,Completed At,Allocated At",
     );
-    const LEGACY_COL = 9;
+    const LEGACY_COL = 13;
+    // "Union (3rd choice)" / "Union (unranked)" -> "Union"
+    const legacyName = (cell: string) => cell.replace(/ \(.*\)$/, "");
 
     // 10 data rows
     const dataRows = lines.slice(1);
     expect(dataRows.length).toBe(10);
 
-    // Each row's legacy is valid and status is Allocated
+    // Each row's legacy is valid, annotated, and status is Allocated
     for (const row of dataRows) {
       const cols = row.split(",");
-      expect(LEGACIES as readonly string[]).toContain(cols[LEGACY_COL]!);
+      const cell = cols[LEGACY_COL]!;
+      expect(LEGACIES as readonly string[]).toContain(legacyName(cell));
+      expect(cell).toMatch(/ \((\d+(st|nd|rd|th) choice|unranked)\)$/);
       expect(cols[6]).toBe("Allocated");
     }
 
     // Rows should be sorted by legacy then name
-    const legacyOrder = dataRows.map((r) => r.split(",")[LEGACY_COL]!);
+    const legacyOrder = dataRows.map((r) => legacyName(r.split(",")[LEGACY_COL]!));
     const sortedLegacyOrder = [...legacyOrder].sort();
     expect(legacyOrder).toEqual(sortedLegacyOrder);
   });
 
   // ── Demographics and derived rank ──────────────────────────────────
 
-  it("includes demographics and the derived assigned rank", async () => {
+  it("includes demographics, runner-up choices, and the derived assigned rank", async () => {
     await seedUser({
       userId: "demo-user",
       userName: "Demo User",
       cohort: "2029",
       isCompleted: true,
-      affinityVector: { Cable: 10, Ocean: 5 },
+      affinityVector: { Cable: 10, Ocean: 5, Gate: 3 },
       allocatedLegacy: "Ocean",
       demographics: { gender: "Woman", country: "Zimbabwe", ageRange: "18-24" },
     });
@@ -136,9 +140,39 @@ describe("GET /api/export-cohort-roster", () => {
     expect(cols[3]).toBe("Woman");
     expect(cols[4]).toBe("Zimbabwe");
     expect(cols[5]).toBe("18-24");
-    // Cable scored highest but Ocean was allocated -> rank 2
-    expect(cols[9]).toBe("Ocean");
-    expect(cols[10]).toBe("2");
+    // Runner-ups are listed with their scores; unscored slots stay blank
+    expect(cols[9]).toBe("Ocean (5)");
+    expect(cols[10]).toBe("Gate (3)");
+    expect(cols[11]).toBe("");
+    expect(cols[12]).toBe("");
+    // Cable scored highest but Ocean was allocated -> 2nd choice
+    expect(cols[13]).toBe("Ocean (2nd choice)");
+    expect(cols[14]).toBe("2");
+  });
+
+  // ── Zero-score allocation is reported as unranked ──────────────────
+
+  it("marks an allocation the user scored no points in as unranked", async () => {
+    await seedUser({
+      userId: "unranked-user",
+      userName: "Unranked User",
+      cohort: "2029",
+      isCompleted: true,
+      affinityVector: { Cable: 10, Ocean: 5 },
+      // Tower scored zero — ordering past their scored legacies is just
+      // alphabetical tie-breaking, so no rank number should be claimed.
+      allocatedLegacy: "Tower",
+    });
+
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      query: { cohort: "2029" },
+      headers: authHeaders,
+    });
+
+    const cols = (data as string).trim().split("\n")[1]!.split(",");
+    expect(cols[13]).toBe("Tower (unranked)");
+    expect(cols[14]).toBe("");
   });
 
   // ── CSV escaping ───────────────────────────────────────────────────

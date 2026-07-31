@@ -7,6 +7,22 @@ function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+/** 1 -> "1st", 2 -> "2nd", 11 -> "11th", 23 -> "23rd" */
+function ordinal(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
 function formatTimestamp(value: unknown): string {
   if (
     value &&
@@ -63,7 +79,12 @@ export default async function handler(
       status: string;
       vibe: string;
       topLegacy: string;
+      /** 2nd–5th ranked legacies, e.g. "Ocean (5)"; blank past their scored legacies */
+      runnerUps: string[];
+      /** Raw legacy name, used for grouping rows */
       allocatedLegacy: string;
+      /** Legacy annotated with where it sat in their own ranking */
+      allocatedLabel: string;
       assignedRank: string;
       completedAt: string;
       allocatedAt: string;
@@ -83,16 +104,37 @@ export default async function handler(
           ? "Allocated"
           : "Awaiting allocation";
 
-      // Rank of the allocated legacy in the user's own preference order
-      // (1 = their top-scored legacy) — derived from stored data, so admins
-      // can see when balancing placed someone outside their top choice.
       const affinityVector = results.affinityVector as
         | Partial<Record<string, number>>
         | undefined;
+      const ranked = affinityVector ? rankLegacies(affinityVector) : [];
+      const scoreOf = (legacy: string) => affinityVector?.[legacy] ?? 0;
+
+      // Runner-up choices (ranks 2-5). Only legacies the person actually
+      // scored points in are listed: past that, rankLegacies is just breaking
+      // ties alphabetically between zeros, which would imply a preference
+      // that does not exist.
+      const runnerUps = [1, 2, 3, 4].map((i) => {
+        const legacy = ranked[i];
+        if (!legacy) return "";
+        const score = scoreOf(legacy);
+        return score > 0 ? `${legacy} (${score})` : "";
+      });
+
+      // Where the allocated legacy sat in their own preference order
+      // (1 = their top-scored legacy), so admins can see when balancing
+      // placed someone outside their top choice. A legacy they scored zero
+      // points in is reported as unranked rather than given a rank number.
+      let allocatedLabel = allocatedLegacy;
       let assignedRank = "";
       if (allocatedLegacy && affinityVector) {
-        const rank = rankLegacies(affinityVector).indexOf(allocatedLegacy);
-        if (rank >= 0) assignedRank = String(rank + 1);
+        const rank = ranked.indexOf(allocatedLegacy);
+        if (rank >= 0 && scoreOf(allocatedLegacy) > 0) {
+          assignedRank = String(rank + 1);
+          allocatedLabel = `${allocatedLegacy} (${ordinal(rank + 1)} choice)`;
+        } else {
+          allocatedLabel = `${allocatedLegacy} (unranked)`;
+        }
       }
 
       return {
@@ -114,7 +156,9 @@ export default async function handler(
           typeof results.displayCategory === "string"
             ? results.displayCategory
             : "",
+        runnerUps,
         allocatedLegacy,
+        allocatedLabel,
         assignedRank,
         completedAt: formatTimestamp(data.completedAt),
         allocatedAt: formatTimestamp(data.allocatedAt),
@@ -147,6 +191,10 @@ export default async function handler(
       "Status",
       "Vibe",
       "Top Legacy",
+      "2nd Choice",
+      "3rd Choice",
+      "4th Choice",
+      "5th Choice",
       "Allocated Legacy",
       "Assigned Rank",
       "Completed At",
@@ -165,7 +213,8 @@ export default async function handler(
           row.status,
           row.vibe,
           row.topLegacy,
-          row.allocatedLegacy,
+          ...row.runnerUps,
+          row.allocatedLabel,
           row.assignedRank,
           row.completedAt,
           row.allocatedAt,
