@@ -34,6 +34,10 @@ export interface CohortOverview {
   legacyCounts: Record<string, number>;
   top1Rate: number;
   top3Rate: number;
+  /** Allocated members with score data — the denominator for the rates above */
+  rankedCount: number;
+  top1Count: number;
+  top3Count: number;
   users: OverviewUser[];
   runs: AllocationRun[];
 }
@@ -171,6 +175,9 @@ export default async function handler(
       legacyCounts,
       top1Rate: rankedCount > 0 ? top1 / rankedCount : 0,
       top3Rate: rankedCount > 0 ? top3 / rankedCount : 0,
+      rankedCount,
+      top1Count: top1,
+      top3Count: top3,
       users,
       runs,
     });

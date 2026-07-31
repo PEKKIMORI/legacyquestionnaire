@@ -111,6 +111,10 @@ describe("GET /api/cohort-overview", () => {
     // One of two allocated got their top legacy; both within top 3
     expect(overview.top1Rate).toBeCloseTo(0.5);
     expect(overview.top3Rate).toBeCloseTo(1);
+    // Raw counts back the percentages shown on the dashboard
+    expect(overview.rankedCount).toBe(2);
+    expect(overview.top1Count).toBe(1);
+    expect(overview.top3Count).toBe(2);
 
     // Users sorted by name
     expect(overview.users.map((u) => u.name)).toEqual([
