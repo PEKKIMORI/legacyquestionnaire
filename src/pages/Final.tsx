@@ -4,6 +4,7 @@ import { db } from "./../../firebase";
 import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
 import { auth } from "./../../firebase";
 import { animationVariants, withDelay } from "~/utils/animationUtils";
+import { rankLegacies } from "~/utils/allocate";
 
 const FinalPage: React.FC = () => {
   const [vibe, setVibe] = useState<string>("evaluating...");
@@ -62,9 +63,11 @@ const FinalPage: React.FC = () => {
               return;
             }
             
-            const highestCategory = entries.reduce(
-              (a, b) => (a[1] > b[1] ? a : b)
-            )[0];            const minervaVibes: Record<string, string[]> = {
+            // Ranked with the same tie-breaking the allocator and the admin
+            // export use, so a tied top score resolves identically everywhere
+            // (previously this picked whichever tied legacy was counted first,
+            // which made the roster's "top legacy" disagree with its ranking).
+            const highestCategory = rankLegacies(tally)[0]!;            const minervaVibes: Record<string, string[]> = {
               Civic: ["Stewardship", "Altruism", "Community"],
               Legion: ["Camaraderie", "Valor", "Solidarity"],
               Liberty: ["Autonomy", "Empowerment", "Liberation"],
