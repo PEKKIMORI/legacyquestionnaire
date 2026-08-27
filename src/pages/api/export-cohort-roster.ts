@@ -1,43 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { db } from "~/utils/firebaseAdmin";
-import { LEGACIES, rankLegacies } from "~/utils/allocate";
 import { verifyAdmin } from "~/utils/verifyAdmin";
-
-function csvEscape(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
-/** 1 -> "1st", 2 -> "2nd", 11 -> "11th", 23 -> "23rd" */
-function ordinal(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
-}
-
-function formatTimestamp(value: unknown): string {
-  if (
-    value &&
-    typeof value === "object" &&
-    "toDate" in value &&
-    typeof (value as { toDate: unknown }).toDate === "function"
-  ) {
-    try {
-      return (value as { toDate: () => Date }).toDate().toISOString();
-    } catch {
-      return "";
-    }
-  }
-  return "";
-}
+import {
+  allocationLabel,
+  choiceColumns,
+  csvEscape,
+  formatDateTime,
+  responseStatus,
+  type Affinity,
+} from "~/utils/exportFormat";
 
 export default async function handler(
   req: NextApiRequest,
@@ -99,52 +70,17 @@ export default async function handler(
       const isCompleted = data.isCompleted === true;
       const allocatedLegacy =
         typeof data.allocatedLegacy === "string" ? data.allocatedLegacy : "";
-      const status = !isCompleted
-        ? "Incomplete"
-        : allocatedLegacy
-          ? "Allocated"
-          : "Awaiting allocation";
+      const status = responseStatus(isCompleted, allocatedLegacy);
 
-      const affinityVector = results.affinityVector as
-        | Partial<Record<string, number>>
-        | undefined;
-      const ranked = affinityVector ? rankLegacies(affinityVector) : [];
-      const scoreOf = (legacy: string) => affinityVector?.[legacy] ?? 0;
+      const affinityVector = results.affinityVector as Affinity;
 
-      // Choices 1-5, all derived from the same ranking so the row is
-      // internally consistent. Only legacies the person actually scored
-      // points in are listed: past that, rankLegacies is just breaking ties
-      // alphabetically between zeros, which would imply a preference that
-      // does not exist.
-      const choices = [0, 1, 2, 3, 4].map((i) => {
-        const legacy = ranked[i];
-        if (!legacy) return "";
-        const score = scoreOf(legacy);
-        return score > 0 ? `${legacy} (${score})` : "";
-      });
-
-      // Where the allocated legacy sat in their own preference order
-      // (1 = their top-scored legacy), so admins can see when balancing
-      // placed someone outside their top choice. A legacy they scored zero
-      // points in is reported as unranked rather than given a rank number.
-      let allocatedLabel = allocatedLegacy;
-      let assignedRank = "";
-      if (allocatedLegacy && affinityVector) {
-        const rank = ranked.indexOf(allocatedLegacy);
-        const allocatedScore = scoreOf(allocatedLegacy);
-        if (rank >= 0 && allocatedScore > 0) {
-          assignedRank = String(rank + 1);
-          // Scores are small integers, so several legacies routinely share the
-          // same score and the ordinal between them is only alphabetical
-          // tie-breaking. Say so rather than implying a real preference gap.
-          // (Phrased without a comma so no CSV cell needs quoting.)
-          const tied =
-            LEGACIES.filter((l) => scoreOf(l) === allocatedScore).length > 1;
-          allocatedLabel = `${allocatedLegacy} (${tied ? "tied " : ""}${ordinal(rank + 1)} choice)`;
-        } else {
-          allocatedLabel = `${allocatedLegacy} (unranked)`;
-        }
-      }
+      // Choices 1-5 and the allocated label come from one shared ranking, so
+      // the row is internally consistent and matches the other export.
+      const choices = choiceColumns(affinityVector, 5);
+      const { label: allocatedLabel, rank: assignedRank } = allocationLabel(
+        allocatedLegacy,
+        affinityVector,
+      );
 
       return {
         name: typeof data.userName === "string" ? data.userName : "(unknown)",
@@ -169,8 +105,8 @@ export default async function handler(
         allocatedLegacy,
         allocatedLabel,
         assignedRank,
-        completedAt: formatTimestamp(data.completedAt),
-        allocatedAt: formatTimestamp(data.allocatedAt),
+        completedAt: formatDateTime(data.completedAt),
+        allocatedAt: formatDateTime(data.allocatedAt),
       };
     });
 

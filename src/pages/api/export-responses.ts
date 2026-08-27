@@ -2,6 +2,15 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { db, admin } from "~/utils/firebaseAdmin";
 import { google } from "googleapis";
 import { verifyAdmin } from "~/utils/verifyAdmin";
+import {
+  allocationLabel,
+  csvEscape,
+  formatDateTime,
+  formatRanking,
+  responseStatus,
+  scoredChoices,
+  type Affinity,
+} from "~/utils/exportFormat";
 
 // Helper to fetch user name from Google People API by email
 async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
@@ -18,7 +27,7 @@ async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
   const jwtClient = new google.auth.JWT({
     email: process.env.GOOGLE_PEOPLE_API_SERVICE_ACCOUNT_EMAIL,
     key: process.env.GOOGLE_PEOPLE_API_SERVICE_ACCOUNT_PRIVATE_KEY.replace(
-      /\\n/g,
+      /\n/g,
       "\n",
     ),
     scopes: [
@@ -45,22 +54,33 @@ async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
   return "";
 }
 
-// List of columns to include in the CSV
-const CSV_COLUMNS = [
-  "userId",
-  "userName",
-  "cohort",
-  "userEmail",
-  "allocatedLegacy",
-  "sorting_group_0",
-  "sorting_group_1",
-  "sorting_group_2",
-  "sorting_group_3",
-  "sorting_group_4",
-  "sorting_group_5",
-  "sortingCompleted",
-  "isCompleted",
-  "results",
+/**
+ * The credo sorting screens: groups 0-4 rank legacies, group 5 ranks Minerva's
+ * core competencies. Stored per group as { order: [...], timestamp }.
+ */
+const LEGACY_SORTING_GROUPS = [0, 1, 2, 3, 4];
+const COMPETENCY_SORTING_GROUP = 5;
+
+const HEADER = [
+  "Name",
+  "Email",
+  "Cohort",
+  "Gender",
+  "Country",
+  "Age",
+  "Status",
+  "Vibe",
+  "Vibe Legacy",
+  "Allocated Legacy",
+  "Assigned Rank",
+  "Top 5 Legacies",
+  "All Legacy Scores",
+  ...LEGACY_SORTING_GROUPS.map((i) => `Credo Ranking ${i + 1}`),
+  "Competency Ranking",
+  "Sorting Completed",
+  "Started At",
+  "Completed At",
+  "Allocated At",
 ];
 
 export default async function handler(
@@ -84,29 +104,21 @@ export default async function handler(
       return;
     }
 
-    // Prepare CSV headers
-    let csv = CSV_COLUMNS.join(",") + "\n";
-
-    // Gather all userIds to fetch displayNames in parallel
-    const userIdToIndex: Record<string, number[]> = {};
     const docs = snapshot.docs;
-    docs.forEach((doc, idx) => {
-      const data = doc.data() as Record<string, unknown>;
-      const userId = typeof data.userId === "string" ? data.userId : "";
-      if (userId) {
-        if (!userIdToIndex[userId]) userIdToIndex[userId] = [];
-        userIdToIndex[userId].push(idx);
-      }
-    });
 
-    // Fetch displayNames for all unique userIds, fallback to Google People API by email if not found
-    const userIdList = Object.keys(userIdToIndex);
+    // Names are self-reported on the demographics popup; older records predate
+    // that, so fall back to Firebase Auth and then the Google People API.
+    const userIds = Array.from(
+      new Set(
+        docs
+          .map((doc) => (doc.data() as Record<string, unknown>).userId)
+          .filter((id): id is string => typeof id === "string" && id !== ""),
+      ),
+    );
     const userIdToName: Record<string, string> = {};
     const userIdToEmail: Record<string, string> = {};
-
-    // First, try to get displayName from Firebase Auth and cache email
     await Promise.all(
-      userIdList.map(async (uid) => {
+      userIds.map(async (uid) => {
         try {
           const userRecord = await admin.auth().getUser(uid);
           userIdToName[uid] = userRecord.displayName ?? "";
@@ -117,10 +129,8 @@ export default async function handler(
         }
       }),
     );
-
-    // For any userId with blank name, try to fetch from Google People API using email
     await Promise.all(
-      userIdList.map(async (uid) => {
+      userIds.map(async (uid) => {
         if (!userIdToName[uid] && userIdToEmail[uid]) {
           const name = await getNameFromGooglePeopleAPI(userIdToEmail[uid]);
           if (name) userIdToName[uid] = name;
@@ -128,42 +138,71 @@ export default async function handler(
       }),
     );
 
-    // Add rows
-    docs.forEach((doc) => {
+    const rows = docs.map((doc) => {
       const data = doc.data() as Record<string, unknown>;
+      const demographics = (data.demographics ?? {}) as Record<string, unknown>;
+      const results = (data.results ?? {}) as Record<string, unknown>;
+      const affinity = results.affinityVector as Affinity;
+
       const userId = typeof data.userId === "string" ? data.userId : "";
-      const userName = userId ? (userIdToName[userId] ?? "") : "";
-      const row = CSV_COLUMNS.map((col) => {
-        let value;
-        if (col === "userName") {
-          // Prefer self-reported name from Firestore; fall back to Auth lookup for legacy records
-          value = typeof data.userName === "string" && data.userName ? data.userName : userName;
-        } else {
-          value = data[col];
-        }
-        // Convert Firestore Timestamp to ISO string
-        if (value instanceof admin.firestore.Timestamp) {
-          value = value.toDate().toISOString();
-        }
-        // Convert objects to JSON string for CSV
-        if (typeof value === "object" && value !== null) {
-          value = JSON.stringify(value);
-        }
-        // CSV escape for commas and quotes
-        if (
-          typeof value === "string" &&
-          (value.includes(",") || value.includes('"'))
-        ) {
-          value = `"${value.replace(/"/g, '""')}"`;
-        }
-        // Always return a string
-        if (typeof value === "string") return value;
-        if (typeof value === "number" || typeof value === "boolean")
-          return String(value);
-        return value !== undefined && value !== null ? String(value) : "";
-      }).join(",");
-      csv += row + "\n";
+      const name =
+        typeof data.userName === "string" && data.userName
+          ? data.userName
+          : (userIdToName[userId] ?? "");
+      const email =
+        typeof data.userEmail === "string" && data.userEmail
+          ? data.userEmail
+          : (userIdToEmail[userId] ?? "");
+      const cohort = typeof data.cohort === "string" ? data.cohort : "";
+      const allocatedLegacy =
+        typeof data.allocatedLegacy === "string" ? data.allocatedLegacy : "";
+      const { label, rank } = allocationLabel(allocatedLegacy, affinity);
+
+      const cells = [
+        name || "(unknown)",
+        email,
+        cohort,
+        typeof demographics.gender === "string" ? demographics.gender : "",
+        typeof demographics.country === "string" ? demographics.country : "",
+        typeof demographics.age === "string"
+          ? demographics.age
+          : typeof demographics.ageRange === "string"
+            ? demographics.ageRange
+            : "",
+        responseStatus(data.isCompleted === true, allocatedLegacy),
+        typeof results.minervaVibe === "string" ? results.minervaVibe : "",
+        typeof results.displayCategory === "string"
+          ? results.displayCategory
+          : "",
+        label,
+        rank,
+        scoredChoices(affinity, 5).join("; "),
+        scoredChoices(affinity).join("; "),
+        ...LEGACY_SORTING_GROUPS.map((i) =>
+          formatRanking(data[`sorting_group_${i}`]),
+        ),
+        formatRanking(data[`sorting_group_${COMPETENCY_SORTING_GROUP}`]),
+        data.sortingCompleted === true ? "Yes" : "No",
+        formatDateTime(data.startedAt),
+        formatDateTime(data.completedAt),
+        formatDateTime(data.allocatedAt),
+      ];
+
+      return { cohort, name: name || "(unknown)", cells };
     });
+
+    // Grouped by cohort, alphabetical by name, so it reads as a roster rather
+    // than in write order.
+    rows.sort(
+      (a, b) =>
+        a.cohort.localeCompare(b.cohort) || a.name.localeCompare(b.name),
+    );
+
+    const csv =
+      [
+        HEADER.join(","),
+        ...rows.map((r) => r.cells.map(csvEscape).join(",")),
+      ].join("\n") + "\n";
 
     res.setHeader("Content-Type", "text/csv");
     res.setHeader(
