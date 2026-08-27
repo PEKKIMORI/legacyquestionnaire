@@ -9,6 +9,7 @@ import {
   responseStatus,
   type Affinity,
 } from "~/utils/exportFormat";
+import { credoPositionsFromResponse } from "~/utils/credo";
 
 export default async function handler(
   req: NextApiRequest,
@@ -76,10 +77,12 @@ export default async function handler(
 
       // Choices 1-5 and the allocated label come from one shared ranking, so
       // the row is internally consistent and matches the other export.
-      const choices = choiceColumns(affinityVector, 5);
+      const credo = credoPositionsFromResponse(data);
+      const choices = choiceColumns(affinityVector, 5, credo);
       const { label: allocatedLabel, rank: assignedRank } = allocationLabel(
         allocatedLegacy,
         affinityVector,
+        credo,
       );
 
       return {

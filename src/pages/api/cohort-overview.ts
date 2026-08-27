@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { db } from "~/utils/firebaseAdmin";
 import { rankLegacies } from "~/utils/allocate";
 import { verifyAdmin } from "~/utils/verifyAdmin";
+import { credoPositionsFromResponse } from "~/utils/credo";
 
 export interface OverviewUser {
   name: string;
@@ -113,7 +114,10 @@ export default async function handler(
       let topLegacies: { legacy: string; score: number }[] = [];
       let assignedRank: number | null = null;
       if (affinityVector) {
-        const ranked = rankLegacies(affinityVector);
+        const ranked = rankLegacies(
+          affinityVector,
+          credoPositionsFromResponse(data),
+        );
         topLegacies = ranked.slice(0, 3).map((legacy) => ({
           legacy,
           score: affinityVector[legacy] ?? 0,
