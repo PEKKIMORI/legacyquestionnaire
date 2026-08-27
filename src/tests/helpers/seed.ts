@@ -27,6 +27,8 @@ export async function seedUser(params: {
   allocatedLegacy?: string;
   /** Value stored at completion; may differ from rank 1 when the top score ties */
   displayCategory?: string;
+  /** Credo sorting screens, keyed by group index, as stored by the sorting page */
+  sortingGroups?: Record<number, string[]>;
   demographics?: { gender: string; country: string; ageRange: string };
 }): Promise<string> {
   const db = getDb();
@@ -48,6 +50,15 @@ export async function seedUser(params: {
       ageRange: "18-24",
     },
   };
+
+  if (params.sortingGroups) {
+    for (const [index, order] of Object.entries(params.sortingGroups)) {
+      doc[`sorting_group_${index}`] = {
+        order,
+        timestamp: admin.firestore.Timestamp.now(),
+      };
+    }
+  }
 
   if (params.allocatedLegacy) {
     doc.allocatedLegacy = params.allocatedLegacy;

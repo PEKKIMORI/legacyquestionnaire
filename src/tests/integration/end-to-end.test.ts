@@ -79,7 +79,7 @@ describe("Cross-endpoint integration", () => {
 
   // ── Full flow: allocate → export responses ─────────────────────────
 
-  it("allocate then export responses shows allocatedLegacy column", async () => {
+  it("allocate then export responses shows the allocated legacy", async () => {
     await seedCohort({ cohort: "2029", count: 10, seed: 910 });
 
     // Allocate
@@ -100,10 +100,10 @@ describe("Cross-endpoint integration", () => {
     const csv = exportData as string;
     const lines = csv.trim().split("\n");
     const header = lines[0]!;
-    const allocLegacyIdx = header.split(",").indexOf("allocatedLegacy");
+    const allocLegacyIdx = header.split(",").indexOf("Allocated Legacy");
     expect(allocLegacyIdx).toBeGreaterThan(-1);
 
-    // Every data row should have a non-empty allocatedLegacy value
+    // Every data row should name the legacy the person was allocated to
     const dataRows = lines.slice(1);
     expect(dataRows.length).toBe(10);
     for (const row of dataRows) {

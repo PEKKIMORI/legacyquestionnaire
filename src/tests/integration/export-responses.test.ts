@@ -65,21 +65,25 @@ describe("GET /api/export-responses", () => {
     const csv = data as string;
     const lines = csv.trim().split("\n");
 
-    // Header row should contain expected columns
+    // Header row uses human-readable column names
     const headerRow = lines[0]!;
-    expect(headerRow).toContain("userId");
-    expect(headerRow).toContain("userName");
-    expect(headerRow).toContain("cohort");
-    expect(headerRow).toContain("allocatedLegacy");
-    expect(headerRow).toContain("isCompleted");
+    expect(headerRow).toContain("Name");
+    expect(headerRow).toContain("Cohort");
+    expect(headerRow).toContain("Allocated Legacy");
+    expect(headerRow).toContain("Status");
+    // Raw stored field names should not leak into a sheet people read
+    expect(headerRow).not.toContain("userId");
+    expect(headerRow).not.toContain("sorting_group_0");
 
     // Should have exactly 1 data row
     expect(lines.length).toBe(2);
 
-    // Data row should contain our values
+    // Data row should contain our values, rendered readably
     const dataRow = lines[1]!;
-    expect(dataRow).toContain("user-1");
+    expect(dataRow).toContain("Alice Test");
     expect(dataRow).toContain("2029");
+    expect(dataRow).toContain("Cable (1st choice)");
+    expect(dataRow).toContain("Allocated");
   });
 
   // ── Multiple users ─────────────────────────────────────────────────
@@ -118,8 +122,50 @@ describe("GET /api/export-responses", () => {
     const csv = data as string;
     const header = csv.split("\n")[0]!;
     const columns = header.split(",");
-    expect(columns).toContain("cohort");
-    expect(columns).toContain("allocatedLegacy");
+    expect(columns).toContain("Cohort");
+    expect(columns).toContain("Allocated Legacy");
+    expect(columns).toContain("Assigned Rank");
+  });
+
+  // ── Nothing is dumped as raw JSON ──────────────────────────────────
+
+  it("renders scores, rankings and dates as readable text, not JSON", async () => {
+    await seedUser({
+      userId: "user-readable",
+      userName: "Readable User",
+      cohort: "2029",
+      isCompleted: true,
+      affinityVector: { Cable: 4, Chronicle: 2, Civic: 1 },
+      allocatedLegacy: "Cable",
+      sortingGroups: {
+        0: ["Circuit", "Chronicle", "Civic", "Cable", "Eureka"],
+        5: ["Professional Development", "Civic Responsibility"],
+      },
+    });
+
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      headers: authHeaders,
+    });
+
+    const csv = data as string;
+    // No raw Firestore structures anywhere in the file
+    expect(csv).not.toContain('"order":');
+    expect(csv).not.toContain("_seconds");
+    expect(csv).not.toContain("affinityVector");
+
+    const cols = csv.trim().split("\n")[1]!.split(",");
+    const header = csv.split("\n")[0]!.split(",");
+    const col = (name: string) => cols[header.indexOf(name)]!;
+    expect(col("Top 5 Legacies")).toBe("Cable (4); Chronicle (2); Civic (1)");
+    expect(col("Credo Ranking 1")).toBe(
+      "Circuit > Chronicle > Civic > Cable > Eureka",
+    );
+    expect(col("Competency Ranking")).toBe(
+      "Professional Development > Civic Responsibility",
+    );
+    // Dates read as dates rather than ISO timestamps
+    expect(col("Started At")).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   });
 
   // ── userName prefers self-reported ─────────────────────────────────
