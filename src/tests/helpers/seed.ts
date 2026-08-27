@@ -25,6 +25,8 @@ export async function seedUser(params: {
   isCompleted: boolean;
   affinityVector: Partial<Record<string, number>>;
   allocatedLegacy?: string;
+  /** Value stored at completion; may differ from rank 1 when the top score ties */
+  displayCategory?: string;
   demographics?: { gender: string; country: string; ageRange: string };
 }): Promise<string> {
   const db = getDb();
@@ -36,7 +38,7 @@ export async function seedUser(params: {
     cohort: params.cohort,
     isCompleted: params.isCompleted,
     results: {
-      displayCategory: "Cable",
+      displayCategory: params.displayCategory ?? "Cable",
       affinityVector: params.affinityVector,
     },
     startedAt: admin.firestore.Timestamp.now(),

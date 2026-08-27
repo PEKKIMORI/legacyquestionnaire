@@ -90,10 +90,10 @@ describe("GET /api/export-cohort-roster", () => {
 
     // Header row
     expect(lines[0]).toBe(
-      "Name,Email,Cohort,Gender,Country,Age,Status,Vibe,Top Legacy,2nd Choice,3rd Choice,4th Choice,5th Choice,Allocated Legacy,Assigned Rank,Completed At,Allocated At",
+      "Name,Email,Cohort,Gender,Country,Age,Status,Vibe,Vibe Legacy,1st Choice,2nd Choice,3rd Choice,4th Choice,5th Choice,Allocated Legacy,Assigned Rank,Completed At,Allocated At",
     );
-    const LEGACY_COL = 13;
-    // "Union (3rd choice)" / "Union (unranked)" -> "Union"
+    const LEGACY_COL = 14;
+    // "Union (3rd choice)" / "Union (tied 3rd choice)" / "Union (unranked)" -> "Union"
     const legacyName = (cell: string) => cell.replace(/ \(.*\)$/, "");
 
     // 10 data rows
@@ -105,7 +105,7 @@ describe("GET /api/export-cohort-roster", () => {
       const cols = row.split(",");
       const cell = cols[LEGACY_COL]!;
       expect(LEGACIES as readonly string[]).toContain(legacyName(cell));
-      expect(cell).toMatch(/ \((\d+(st|nd|rd|th) choice|unranked)\)$/);
+      expect(cell).toMatch(/ \(((tied )?\d+(st|nd|rd|th) choice|unranked)\)$/);
       expect(cols[6]).toBe("Allocated");
     }
 
@@ -140,14 +140,15 @@ describe("GET /api/export-cohort-roster", () => {
     expect(cols[3]).toBe("Woman");
     expect(cols[4]).toBe("Zimbabwe");
     expect(cols[5]).toBe("18-24");
-    // Runner-ups are listed with their scores; unscored slots stay blank
-    expect(cols[9]).toBe("Ocean (5)");
-    expect(cols[10]).toBe("Gate (3)");
-    expect(cols[11]).toBe("");
+    // Choices 1-5 all come from the same ranking; unscored slots stay blank
+    expect(cols[9]).toBe("Cable (10)");
+    expect(cols[10]).toBe("Ocean (5)");
+    expect(cols[11]).toBe("Gate (3)");
     expect(cols[12]).toBe("");
+    expect(cols[13]).toBe("");
     // Cable scored highest but Ocean was allocated -> 2nd choice
-    expect(cols[13]).toBe("Ocean (2nd choice)");
-    expect(cols[14]).toBe("2");
+    expect(cols[14]).toBe("Ocean (2nd choice)");
+    expect(cols[15]).toBe("2");
   });
 
   // ── Zero-score allocation is reported as unranked ──────────────────
@@ -171,9 +172,67 @@ describe("GET /api/export-cohort-roster", () => {
     });
 
     const cols = (data as string).trim().split("\n")[1]!.split(",");
-    expect(cols[13]).toBe("Tower (unranked)");
-    expect(cols[14]).toBe("");
+    expect(cols[14]).toBe("Tower (unranked)");
+    expect(cols[15]).toBe("");
   });
+
+  // ── Tied scores are labelled as tied ───────────────────────────────
+
+  it("flags an assignment whose score ties with other legacies", async () => {
+    await seedUser({
+      userId: "tied-user",
+      userName: "Tied User",
+      cohort: "2029",
+      isCompleted: true,
+      // Cable and Lands both score 3: rankLegacies puts Cable first purely on
+      // alphabetical tie-break, so the ordinal must not imply a real gap.
+      affinityVector: { Cable: 3, Lands: 3, Ocean: 1 },
+      allocatedLegacy: "Lands",
+    });
+
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      query: { cohort: "2029" },
+      headers: authHeaders,
+    });
+
+    const cols = (data as string).trim().split("\n")[1]!.split(",");
+    expect(cols[9]).toBe("Cable (3)");
+    expect(cols[10]).toBe("Lands (3)");
+    expect(cols[14]).toBe("Lands (tied 2nd choice)");
+    expect(cols[15]).toBe("2");
+  });
+
+  // ── Vibe Legacy stays distinct from the computed ranking ───────────
+
+  it("keeps Vibe Legacy separate from the 1st choice when the top score ties", async () => {
+    await seedUser({
+      userId: "vibe-mismatch",
+      userName: "Vibe Mismatch",
+      cohort: "2029",
+      isCompleted: true,
+      affinityVector: { Cable: 3, Lands: 3 },
+      allocatedLegacy: "Cable",
+      // Stored when they finished; tied with Cable, so it can differ from rank 1
+      displayCategory: "Lands",
+    });
+
+    const { data } = await callApiHandler(handler, {
+      method: "GET",
+      query: { cohort: "2029" },
+      headers: authHeaders,
+    });
+
+    const cols = (data as string).trim().split("\n")[1]!.split(",");
+    // Vibe Legacy keeps the stored value that produced their vibe word...
+    expect(cols[8]).toBe("Lands");
+    // ...while the choice columns are self-consistent with the ranking, so the
+    // allocated legacy always appears among them (the bug Branden reported).
+    expect(cols[9]).toBe("Cable (3)");
+    expect(cols[10]).toBe("Lands (3)");
+    expect(cols[14]).toBe("Cable (tied 1st choice)");
+  });
+
 
   // ── CSV escaping ───────────────────────────────────────────────────
 

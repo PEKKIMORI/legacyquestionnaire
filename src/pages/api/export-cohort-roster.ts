@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { db } from "~/utils/firebaseAdmin";
-import { rankLegacies } from "~/utils/allocate";
+import { LEGACIES, rankLegacies } from "~/utils/allocate";
 import { verifyAdmin } from "~/utils/verifyAdmin";
 
 function csvEscape(value: string): string {
@@ -78,9 +78,10 @@ export default async function handler(
       age: string;
       status: string;
       vibe: string;
-      topLegacy: string;
-      /** 2nd–5th ranked legacies, e.g. "Ocean (5)"; blank past their scored legacies */
-      runnerUps: string[];
+      /** Legacy that produced their vibe word (stored when they finished) */
+      vibeLegacy: string;
+      /** 1st-5th ranked legacies, e.g. "Ocean (5)"; blank past their scored legacies */
+      choices: string[];
       /** Raw legacy name, used for grouping rows */
       allocatedLegacy: string;
       /** Legacy annotated with where it sat in their own ranking */
@@ -110,11 +111,12 @@ export default async function handler(
       const ranked = affinityVector ? rankLegacies(affinityVector) : [];
       const scoreOf = (legacy: string) => affinityVector?.[legacy] ?? 0;
 
-      // Runner-up choices (ranks 2-5). Only legacies the person actually
-      // scored points in are listed: past that, rankLegacies is just breaking
-      // ties alphabetically between zeros, which would imply a preference
-      // that does not exist.
-      const runnerUps = [1, 2, 3, 4].map((i) => {
+      // Choices 1-5, all derived from the same ranking so the row is
+      // internally consistent. Only legacies the person actually scored
+      // points in are listed: past that, rankLegacies is just breaking ties
+      // alphabetically between zeros, which would imply a preference that
+      // does not exist.
+      const choices = [0, 1, 2, 3, 4].map((i) => {
         const legacy = ranked[i];
         if (!legacy) return "";
         const score = scoreOf(legacy);
@@ -129,9 +131,16 @@ export default async function handler(
       let assignedRank = "";
       if (allocatedLegacy && affinityVector) {
         const rank = ranked.indexOf(allocatedLegacy);
-        if (rank >= 0 && scoreOf(allocatedLegacy) > 0) {
+        const allocatedScore = scoreOf(allocatedLegacy);
+        if (rank >= 0 && allocatedScore > 0) {
           assignedRank = String(rank + 1);
-          allocatedLabel = `${allocatedLegacy} (${ordinal(rank + 1)} choice)`;
+          // Scores are small integers, so several legacies routinely share the
+          // same score and the ordinal between them is only alphabetical
+          // tie-breaking. Say so rather than implying a real preference gap.
+          // (Phrased without a comma so no CSV cell needs quoting.)
+          const tied =
+            LEGACIES.filter((l) => scoreOf(l) === allocatedScore).length > 1;
+          allocatedLabel = `${allocatedLegacy} (${tied ? "tied " : ""}${ordinal(rank + 1)} choice)`;
         } else {
           allocatedLabel = `${allocatedLegacy} (unranked)`;
         }
@@ -152,11 +161,11 @@ export default async function handler(
               : "",
         status,
         vibe: typeof results.minervaVibe === "string" ? results.minervaVibe : "",
-        topLegacy:
+        vibeLegacy:
           typeof results.displayCategory === "string"
             ? results.displayCategory
             : "",
-        runnerUps,
+        choices,
         allocatedLegacy,
         allocatedLabel,
         assignedRank,
@@ -190,7 +199,8 @@ export default async function handler(
       "Age",
       "Status",
       "Vibe",
-      "Top Legacy",
+      "Vibe Legacy",
+      "1st Choice",
       "2nd Choice",
       "3rd Choice",
       "4th Choice",
@@ -212,8 +222,8 @@ export default async function handler(
           row.age,
           row.status,
           row.vibe,
-          row.topLegacy,
-          ...row.runnerUps,
+          row.vibeLegacy,
+          ...row.choices,
           row.allocatedLabel,
           row.assignedRank,
           row.completedAt,
