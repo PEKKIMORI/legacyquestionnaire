@@ -43,7 +43,15 @@ export interface UserAffinity {
   userId: string;
   /** Full tally of points per legacy. Missing keys are treated as 0. */
   affinityVector: Partial<Record<string, number>>;
+  /** Where each legacy sat on the person's credo screens (0 = ranked first). */
+  credoPositions?: CredoPositions;
 }
+
+/**
+ * How highly the person ranked each legacy's credo, 0 being first.
+ * Used only to separate legacies the questions score identically.
+ */
+export type CredoPositions = Partial<Record<string, number>>;
 
 export interface AllocationResult {
   userId: string;
@@ -90,17 +98,44 @@ export function computeCapacities(n: number): Record<string, number> {
 
 /**
  * Sort a user's affinity vector into a ranked list, highest first.
- * Ties are broken alphabetically by legacy name (for determinism).
+ *
+ * Question scores are small integers spread over 25 legacies, so legacies
+ * frequently tie. Where they do, the person's own credo ranking decides,
+ * and only if that cannot separate them do we fall back to alphabetical
+ * order for determinism.
  */
 export function rankLegacies(
   affinityVector: Partial<Record<string, number>>,
+  credoPositions?: CredoPositions,
 ): string[] {
   return [...LEGACIES].sort((a, b) => {
     const scoreA = affinityVector[a] ?? 0;
     const scoreB = affinityVector[b] ?? 0;
     if (scoreB !== scoreA) return scoreB - scoreA;
+    const posA = credoPositions?.[a] ?? Number.MAX_SAFE_INTEGER;
+    const posB = credoPositions?.[b] ?? Number.MAX_SAFE_INTEGER;
+    if (posA !== posB) return posA - posB;
     return a.localeCompare(b);
   });
+}
+
+/**
+ * True when the ordinal between this legacy and another is arbitrary:
+ * same question score and nothing in the credo ranking to separate them.
+ */
+export function isArbitrarilyRanked(
+  legacy: string,
+  affinityVector: Partial<Record<string, number>>,
+  credoPositions?: CredoPositions,
+): boolean {
+  const score = affinityVector[legacy] ?? 0;
+  const pos = credoPositions?.[legacy] ?? Number.MAX_SAFE_INTEGER;
+  return LEGACIES.some(
+    (other) =>
+      other !== legacy &&
+      (affinityVector[other] ?? 0) === score &&
+      (credoPositions?.[other] ?? Number.MAX_SAFE_INTEGER) === pos,
+  );
 }
 
 /**
@@ -153,7 +188,7 @@ export function allocateCohort(users: UserAffinity[]): AllocationSummary {
   const allocations: AllocationResult[] = [];
 
   for (const user of sorted) {
-    const ranked = rankLegacies(user.affinityVector);
+    const ranked = rankLegacies(user.affinityVector, user.credoPositions);
     let assigned = false;
 
     for (let rank = 0; rank < ranked.length; rank++) {

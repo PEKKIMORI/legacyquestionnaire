@@ -11,6 +11,7 @@ import {
   scoredChoices,
   type Affinity,
 } from "~/utils/exportFormat";
+import { credoPositionsFromResponse } from "~/utils/credo";
 
 // Helper to fetch user name from Google People API by email
 async function getNameFromGooglePeopleAPI(email: string): Promise<string> {
@@ -156,7 +157,8 @@ export default async function handler(
       const cohort = typeof data.cohort === "string" ? data.cohort : "";
       const allocatedLegacy =
         typeof data.allocatedLegacy === "string" ? data.allocatedLegacy : "";
-      const { label, rank } = allocationLabel(allocatedLegacy, affinity);
+      const credo = credoPositionsFromResponse(data);
+      const { label, rank } = allocationLabel(allocatedLegacy, affinity, credo);
 
       const cells = [
         name || "(unknown)",
@@ -176,8 +178,8 @@ export default async function handler(
           : "",
         label,
         rank,
-        scoredChoices(affinity, 5).join("; "),
-        scoredChoices(affinity).join("; "),
+        scoredChoices(affinity, 5, credo).join("; "),
+        scoredChoices(affinity, undefined, credo).join("; "),
         ...LEGACY_SORTING_GROUPS.map((i) =>
           formatRanking(data[`sorting_group_${i}`]),
         ),

@@ -4,7 +4,11 @@
  * These files are read by people, in a spreadsheet, so values are rendered as
  * plain readable text rather than raw stored structures.
  */
-import { LEGACIES, rankLegacies } from "~/utils/allocate";
+import {
+  isArbitrarilyRanked,
+  rankLegacies,
+  type CredoPositions,
+} from "~/utils/allocate";
 
 export type Affinity = Partial<Record<string, number>> | undefined;
 
@@ -63,41 +67,51 @@ export function formatDateTime(value: unknown): string {
  * rankLegacies is only breaking ties alphabetically between zeros, which
  * would imply a preference that does not exist.
  */
-export function scoredChoices(affinity: Affinity, limit?: number): string[] {
+export function scoredChoices(
+  affinity: Affinity,
+  limit?: number,
+  credo?: CredoPositions,
+): string[] {
   if (!affinity) return [];
-  const ranked = rankLegacies(affinity).filter((l) => (affinity[l] ?? 0) > 0);
+  const ranked = rankLegacies(affinity, credo).filter(
+    (l) => (affinity[l] ?? 0) > 0,
+  );
   const slice = limit === undefined ? ranked : ranked.slice(0, limit);
   return slice.map((l) => `${l} (${affinity[l] ?? 0})`);
 }
 
 /** Fixed-width version of scoredChoices, padded with blanks for CSV columns. */
-export function choiceColumns(affinity: Affinity, count: number): string[] {
-  const choices = scoredChoices(affinity, count);
+export function choiceColumns(
+  affinity: Affinity,
+  count: number,
+  credo?: CredoPositions,
+): string[] {
+  const choices = scoredChoices(affinity, count, credo);
   return Array.from({ length: count }, (_, i) => choices[i] ?? "");
 }
 
 /**
  * Where the allocated legacy sat in the person's own ranking.
  *
- * Scores are small integers, so legacies routinely share a score and the
- * ordinal between them is only alphabetical tie-breaking; those are marked
- * "tied" rather than implying a real preference gap. Phrased without a comma
- * so the cell never needs quoting.
+ * Marked "tied" only when the ordinal really is arbitrary: same question
+ * score and nothing in their credo ranking to separate them. Phrased without
+ * a comma so the cell never needs quoting.
  */
 export function allocationLabel(
   allocatedLegacy: string,
   affinity: Affinity,
+  credo?: CredoPositions,
 ): { label: string; rank: string } {
   if (!allocatedLegacy) return { label: "", rank: "" };
   if (!affinity) return { label: allocatedLegacy, rank: "" };
 
-  const ranked = rankLegacies(affinity);
+  const ranked = rankLegacies(affinity, credo);
   const rank = ranked.indexOf(allocatedLegacy);
   const score = affinity[allocatedLegacy] ?? 0;
   if (rank < 0 || score <= 0) {
     return { label: `${allocatedLegacy} (unranked)`, rank: "" };
   }
-  const tied = LEGACIES.filter((l) => (affinity[l] ?? 0) === score).length > 1;
+  const tied = isArbitrarilyRanked(allocatedLegacy, affinity, credo);
   return {
     label: `${allocatedLegacy} (${tied ? "tied " : ""}${ordinal(rank + 1)} choice)`,
     rank: String(rank + 1),

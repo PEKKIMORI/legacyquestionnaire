@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { db } from "~/utils/firebaseAdmin";
 import { allocateCohort, type UserAffinity } from "~/utils/allocate";
 import { verifyAdmin } from "~/utils/verifyAdmin";
+import { credoPositionsFromResponse } from "~/utils/credo";
 
 type ResponseData =
   | {
@@ -71,7 +72,11 @@ export default async function handler(
         | undefined;
 
       if (affinityVector && typeof affinityVector === "object") {
-        users.push({ userId, affinityVector });
+        users.push({
+          userId,
+          affinityVector,
+          credoPositions: credoPositionsFromResponse(data),
+        });
         docIdByUserId[userId] = document.id;
       }
     });

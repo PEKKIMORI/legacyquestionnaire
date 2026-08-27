@@ -3,6 +3,7 @@ import {
   allocateCohort,
   computeCapacities,
   rankLegacies,
+  isArbitrarilyRanked,
   computeMargin,
   LEGACIES,
   type UserAffinity,
@@ -591,5 +592,62 @@ describe("rankLegacies", () => {
     const ranked = rankLegacies({ Mission: 1 });
     expect(ranked[0]).toBe("Mission");
     expect(ranked.slice(1).every((l) => l !== "Mission")).toBe(true);
+  });
+});
+
+describe("credo tie-breaking", () => {
+  it("uses the credo ranking to separate legacies with equal scores", () => {
+    const affinity = { Lands: 4, Legion: 4 };
+    // Alphabetical order alone would always put Lands first.
+    expect(rankLegacies(affinity)[0]).toBe("Lands");
+    // The person ranked Legion's credo above Lands' on their screens.
+    expect(rankLegacies(affinity, { Legion: 0, Lands: 3 })[0]).toBe("Legion");
+    expect(rankLegacies(affinity, { Lands: 1, Legion: 4 })[0]).toBe("Lands");
+  });
+
+  it("never lets the credo ranking override a higher question score", () => {
+    const affinity = { Lands: 5, Legion: 4 };
+    // Legion is top of its credo screen, Lands is bottom of its own, but
+    // Lands scored higher on the questions and must stay first.
+    expect(rankLegacies(affinity, { Legion: 0, Lands: 4 })[0]).toBe("Lands");
+  });
+
+  it("falls back to alphabetical when the credo cannot separate them", () => {
+    const affinity = { Lands: 4, Legion: 4 };
+    expect(rankLegacies(affinity, { Lands: 2, Legion: 2 })[0]).toBe("Lands");
+  });
+
+  it("reports a rank as arbitrary only when nothing can separate it", () => {
+    const affinity = { Lands: 4, Legion: 4 };
+    expect(isArbitrarilyRanked("Lands", affinity, { Lands: 2, Legion: 2 })).toBe(
+      true,
+    );
+    expect(isArbitrarilyRanked("Lands", affinity, { Lands: 0, Legion: 3 })).toBe(
+      false,
+    );
+    // Unique score, nothing to tie with
+    expect(isArbitrarilyRanked("Lands", { Lands: 5, Legion: 4 })).toBe(false);
+  });
+
+  it("allocates using each user's own credo ranking", () => {
+    // Both want Lands and Legion equally on points, but their credo screens
+    // disagree, so they should not fight over the same legacy first.
+    const summary = allocateCohort([
+      {
+        userId: "a",
+        affinityVector: { Lands: 4, Legion: 4 },
+        credoPositions: { Lands: 0, Legion: 4 },
+      },
+      {
+        userId: "b",
+        affinityVector: { Lands: 4, Legion: 4 },
+        credoPositions: { Legion: 0, Lands: 4 },
+      },
+    ]);
+    const byUser = Object.fromEntries(
+      summary.allocations.map((a) => [a.userId, a.allocatedLegacy]),
+    );
+    expect(byUser.a).toBe("Lands");
+    expect(byUser.b).toBe("Legion");
   });
 });

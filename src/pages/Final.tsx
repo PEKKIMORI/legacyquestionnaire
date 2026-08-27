@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, updateDoc, doc } from "firebase/fire
 import { auth } from "./../../firebase";
 import { animationVariants, withDelay } from "~/utils/animationUtils";
 import { rankLegacies } from "~/utils/allocate";
+import { credoPositionsFromResponse } from "~/utils/credo";
 
 const FinalPage: React.FC = () => {
   const [vibe, setVibe] = useState<string>("evaluating...");
@@ -64,10 +65,13 @@ const FinalPage: React.FC = () => {
             }
             
             // Ranked with the same tie-breaking the allocator and the admin
-            // export use, so a tied top score resolves identically everywhere
-            // (previously this picked whichever tied legacy was counted first,
-            // which made the roster's "top legacy" disagree with its ranking).
-            const highestCategory = rankLegacies(tally)[0]!;            const minervaVibes: Record<string, string[]> = {
+            // export use, so a tied top score resolves identically everywhere.
+            // Where the questions score two legacies equally, the person's own
+            // credo ranking decides which one their vibe comes from.
+            const highestCategory = rankLegacies(
+              tally,
+              credoPositionsFromResponse(data as Record<string, unknown>),
+            )[0]!;            const minervaVibes: Record<string, string[]> = {
               Civic: ["Stewardship", "Altruism", "Community"],
               Legion: ["Camaraderie", "Valor", "Solidarity"],
               Liberty: ["Autonomy", "Empowerment", "Liberation"],
